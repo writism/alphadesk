@@ -1,0 +1,18 @@
+export const heroStyles = {
+    section: "relative w-full min-h-[60vh] flex items-center overflow-hidden bg-white dark:bg-gray-950",
+    background: "absolute inset-0 bg-gradient-to-br from-blue-100 via-indigo-50 to-white dark:from-blue-950 dark:via-gray-900 dark:to-gray-950",
+    orb1: "absolute -top-32 -left-32 w-[480px] h-[480px] rounded-full bg-blue-300/30 dark:bg-blue-700/20 blur-3xl",
+    orb2: "absolute -bottom-32 -right-20 w-[400px] h-[400px] rounded-full bg-indigo-300/30 dark:bg-indigo-700/20 blur-3xl",
+    container: "relative z-10 mx-auto w-full max-w-5xl px-6 py-28 md:py-40 text-center",
+    badge: "inline-flex items-center gap-1.5 rounded-full border border-blue-200 bg-blue-50/80 backdrop-blur-sm px-4 py-1.5 text-xs font-semibold uppercase tracking-widest text-blue-700 dark:border-blue-700 dark:bg-blue-950/60 dark:text-blue-300 mb-8",
+    badgeDot: "w-1.5 h-1.5 rounded-full bg-blue-500 dark:bg-blue-400",
+    heading: "text-4xl font-extrabold leading-tight tracking-tight text-gray-900 dark:text-white sm:text-5xl md:text-6xl lg:text-7xl",
+    headingAccent: "bg-gradient-to-r from-blue-600 via-indigo-500 to-violet-500 bg-clip-text text-transparent",
+    divider: "mt-8 mx-auto w-16 h-1 rounded-full bg-gradient-to-r from-blue-500 to-indigo-400 dark:from-blue-400 dark:to-indigo-300",
+    subheading: "mt-8 text-lg leading-relaxed text-gray-500 dark:text-gray-400 max-w-2xl mx-auto md:text-xl",
+    stats: "mt-14 grid grid-cols-2 gap-6 sm:grid-cols-4 max-w-3xl mx-auto",
+    statCard: "flex flex-col items-center gap-1 rounded-2xl border border-gray-100 bg-white/70 backdrop-blur-sm px-6 py-5 shadow-sm dark:border-gray-800 dark:bg-gray-900/60",
+    statValue: "text-2xl font-extrabold text-gray-900 dark:text-white md:text-3xl",
+    statValueAccent: "bg-gradient-to-r from-blue-600 to-indigo-500 bg-clip-text text-transparent",
+    statLabel: "text-xs font-medium text-gray-500 dark:text-gray-400 text-center",
+} as const

@@ -1,0 +1,222 @@
+@import "tailwindcss";
+
+/* ── Theme Tokens (indirect references for theme switching) ── */
+@theme inline {
+  /* Primary */
+  --color-primary: var(--t-primary);
+  --color-primary-container: var(--t-primary-container);
+  --color-on-primary: var(--t-on-primary);
+  --color-primary-fixed: var(--t-primary-fixed);
+  --color-primary-fixed-dim: var(--t-primary-fixed-dim);
+  --color-on-primary-fixed: var(--t-on-primary-fixed);
+  --color-on-primary-fixed-variant: var(--t-on-primary-fixed-variant);
+  --color-inverse-primary: var(--t-inverse-primary);
+
+  /* Secondary */
+  --color-secondary: var(--t-secondary);
+  --color-secondary-container: var(--t-secondary-container);
+  --color-on-secondary: var(--t-on-secondary);
+  --color-secondary-fixed: var(--t-secondary-fixed);
+  --color-secondary-fixed-dim: var(--t-secondary-fixed-dim);
+  --color-on-secondary-fixed: var(--t-on-secondary-fixed);
+  --color-on-secondary-fixed-variant: var(--t-on-secondary-fixed-variant);
+  --color-on-secondary-container: var(--t-on-secondary-container);
+
+  /* Tertiary */
+  --color-tertiary: var(--t-tertiary);
+  --color-tertiary-container: var(--t-tertiary-container);
+  --color-on-tertiary: var(--t-on-tertiary);
+  --color-tertiary-fixed: var(--t-tertiary-fixed);
+  --color-tertiary-fixed-dim: var(--t-tertiary-fixed-dim);
+  --color-on-tertiary-fixed: var(--t-on-tertiary-fixed);
+  --color-on-tertiary-fixed-variant: var(--t-on-tertiary-fixed-variant);
+  --color-on-tertiary-container: var(--t-on-tertiary-container);
+
+  /* Error */
+  --color-error: var(--t-error);
+  --color-error-container: var(--t-error-container);
+  --color-on-error: var(--t-on-error);
+  --color-on-error-container: var(--t-on-error-container);
+
+  /* Surface */
+  --color-background: var(--t-background);
+  --color-on-background: var(--t-on-background);
+  --color-surface: var(--t-surface);
+  --color-surface-dim: var(--t-surface-dim);
+  --color-surface-bright: var(--t-surface-bright);
+  --color-surface-container-lowest: var(--t-surface-container-lowest);
+  --color-surface-container-low: var(--t-surface-container-low);
+  --color-surface-container: var(--t-surface-container);
+  --color-surface-container-high: var(--t-surface-container-high);
+  --color-surface-container-highest: var(--t-surface-container-highest);
+  --color-on-surface: var(--t-on-surface);
+  --color-on-surface-variant: var(--t-on-surface-variant);
+  --color-surface-variant: var(--t-surface-variant);
+  --color-surface-tint: var(--t-surface-tint);
+
+  /* Outline */
+  --color-outline: var(--t-outline);
+  --color-outline-variant: var(--t-outline-variant);
+
+  /* Inverse */
+  --color-inverse-surface: var(--t-inverse-surface);
+  --color-inverse-on-surface: var(--t-inverse-on-surface);
+
+  /* Fonts */
+  --font-headline: var(--font-space-grotesk), "Space Grotesk", sans-serif;
+  --font-body: var(--font-inter), "Inter", sans-serif;
+  --font-label: var(--font-space-grotesk), "Space Grotesk", sans-serif;
+  --font-mono: var(--font-ibm-plex-mono), "IBM Plex Mono", monospace;
+
+  /* Border Radius - Terminal: 직각 */
+  --radius-sm: 0px;
+  --radius-md: 0px;
+  --radius-lg: 0px;
+  --radius-xl: 0px;
+  --radius-2xl: 0px;
+  --radius-3xl: 0px;
+}
+
+/* ── Light Theme (actual values) ── */
+:root, [data-theme="light"] {
+  --t-primary: #0001bb;
+  --t-primary-container: #0000ff;
+  --t-on-primary: #ffffff;
+  --t-primary-fixed: #e0e0ff;
+  --t-primary-fixed-dim: #bec2ff;
+  --t-on-primary-fixed: #00006e;
+  --t-on-primary-fixed-variant: #0000ef;
+  --t-inverse-primary: #bec2ff;
+
+  --t-secondary: #5f5e5e;
+  --t-secondary-container: #e2dfde;
+  --t-on-secondary: #ffffff;
+  --t-secondary-fixed: #e5e2e1;
+  --t-secondary-fixed-dim: #c8c6c5;
+  --t-on-secondary-fixed: #1c1b1b;
+  --t-on-secondary-fixed-variant: #474746;
+  --t-on-secondary-container: #636262;
+
+  --t-tertiary: #003f00;
+  --t-tertiary-container: #005900;
+  --t-on-tertiary: #ffffff;
+  --t-tertiary-fixed: #8dfb77;
+  --t-tertiary-fixed-dim: #72de5e;
+  --t-on-tertiary-fixed: #002200;
+  --t-on-tertiary-fixed-variant: #005300;
+  --t-on-tertiary-container: #68d355;
+
+  --t-error: #ba1a1a;
+  --t-error-container: #ffdad6;
+  --t-on-error: #ffffff;
+  --t-on-error-container: #93000a;
+
+  --t-background: #f9f9f9;
+  --t-on-background: #1a1c1c;
+  --t-surface: #f9f9f9;
+  --t-surface-dim: #dadada;
+  --t-surface-bright: #f9f9f9;
+  --t-surface-container-lowest: #ffffff;
+  --t-surface-container-low: #f3f3f3;
+  --t-surface-container: #eeeeee;
+  --t-surface-container-high: #e8e8e8;
+  --t-surface-container-highest: #e2e2e2;
+  --t-on-surface: #1a1c1c;
+  --t-on-surface-variant: #454558;
+  --t-surface-variant: #e2e2e2;
+  --t-surface-tint: #343dff;
+
+  --t-outline: #757589;
+  --t-outline-variant: #c5c4db;
+
+  --t-inverse-surface: #2f3131;
+  --t-inverse-on-surface: #f1f1f1;
+}
+
+/* ── Dark Theme ── */
+[data-theme="dark"] {
+  --t-primary: #4d4dff;
+  --t-primary-container: #1a1aff;
+  --t-on-primary: #ffffff;
+  --t-primary-fixed: #e0e0ff;
+  --t-primary-fixed-dim: #bec2ff;
+  --t-on-primary-fixed: #00006e;
+  --t-on-primary-fixed-variant: #0000ef;
+  --t-inverse-primary: #0001bb;
+
+  --t-secondary: #c8c6c5;
+  --t-secondary-container: #474746;
+  --t-on-secondary: #ffffff;
+  --t-secondary-fixed: #e5e2e1;
+  --t-secondary-fixed-dim: #c8c6c5;
+  --t-on-secondary-fixed: #e5e2e1;
+  --t-on-secondary-fixed-variant: #c8c6c5;
+  --t-on-secondary-container: #c8c6c5;
+
+  --t-tertiary: #72de5e;
+  --t-tertiary-container: #003f00;
+  --t-on-tertiary: #ffffff;
+  --t-tertiary-fixed: #8dfb77;
+  --t-tertiary-fixed-dim: #72de5e;
+  --t-on-tertiary-fixed: #002200;
+  --t-on-tertiary-fixed-variant: #005300;
+  --t-on-tertiary-container: #8dfb77;
+
+  --t-error: #ff6b6b;
+  --t-error-container: #93000a;
+  --t-on-error: #ffffff;
+  --t-on-error-container: #ffdad6;
+
+  --t-background: #0a0a18;
+  --t-on-background: #e2e2f0;
+  --t-surface: #0c0c1d;
+  --t-surface-dim: #080814;
+  --t-surface-bright: #1a1a30;
+  --t-surface-container-lowest: #060610;
+  --t-surface-container-low: #0e0e22;
+  --t-surface-container: #141430;
+  --t-surface-container-high: #1c1c3a;
+  --t-surface-container-highest: #242448;
+  --t-on-surface: #e2e2f0;
+  --t-on-surface-variant: #a0a0c0;
+  --t-surface-variant: #2a2a48;
+  --t-surface-tint: #6060ff;
+
+  --t-outline: #5a5a78;
+  --t-outline-variant: #3a3a55;
+
+  --t-inverse-surface: #e2e2f0;
+  --t-inverse-on-surface: #1a1a30;
+}
+
+html,
+body {
+  height: 100%;
+  overflow: hidden;
+}
+
+body {
+  background-color: var(--t-background);
+  color: var(--t-on-background);
+  font-family: var(--font-body, "Inter", sans-serif);
+}
+
+.material-symbols-outlined {
+  font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+  vertical-align: middle;
+}
+
+::-webkit-scrollbar { width: 4px; height: 4px; }
+::-webkit-scrollbar-track { background: var(--t-surface-container); }
+::-webkit-scrollbar-thumb { background: var(--t-outline); }
+
+/* Landing page specific */
+.sprocket-margin {
+    background-image: radial-gradient(circle, var(--t-surface-dim) 30%, transparent 31%);
+    background-size: 100% 40px;
+    background-position: center;
+}
+
+.micro-perforation {
+    border-top: 1px dashed var(--t-outline);
+}

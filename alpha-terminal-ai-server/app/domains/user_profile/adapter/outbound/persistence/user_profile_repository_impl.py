@@ -1,0 +1,151 @@
+from datetime import date, datetime, time, timedelta
+from typing import List, Optional
+
+from sqlalchemy.orm import Session
+
+from app.domains.account.infrastructure.orm.account_orm import AccountORM
+from app.domains.user_profile.application.port.user_profile_repository_port import UserProfileRepositoryPort
+from app.domains.user_profile.domain.entity.user_interaction import UserInteraction, InteractionType
+from app.domains.user_profile.domain.entity.user_profile import UserProfile
+from app.domains.user_profile.infrastructure.mapper.user_profile_mapper import UserInteractionMapper, UserProfileMapper
+from app.domains.user_profile.infrastructure.orm.user_interaction_orm import UserInteractionORM
+from app.domains.user_profile.infrastructure.orm.user_profile_orm import UserProfileORM
+
+
+class UserProfileRepositoryImpl(UserProfileRepositoryPort):
+    def __init__(self, db: Session):
+        self._db = db
+
+    def find_by_account_id(self, account_id: int) -> Optional[UserProfile]:
+        orm = self._db.query(UserProfileORM).filter(
+            UserProfileORM.account_id == account_id
+        ).first()
+        if orm is None:
+            return None
+        return UserProfileMapper.to_entity(orm)
+
+    def get_by_account_id(self, account_id: int) -> Optional[UserProfile]:
+        """market_analysis.UserProfileRepositoryPort 호환 브릿지."""
+        return self.find_by_account_id(account_id)
+
+    def save(self, profile: UserProfile) -> UserProfile:
+        existing = self._db.query(UserProfileORM).filter(
+            UserProfileORM.account_id == profile.account_id
+        ).first()
+
+        if existing:
+            import json
+            existing.preferred_stocks = json.dumps(profile.preferred_stocks, ensure_ascii=False)
+            existing.interests_text = profile.interests_text
+            existing.investment_style = profile.investment_style
+            existing.risk_tolerance = profile.risk_tolerance
+            existing.preferred_sectors = json.dumps(profile.preferred_sectors, ensure_ascii=False)
+            existing.analysis_preference = profile.analysis_preference
+            existing.keywords_of_interest = json.dumps(profile.keywords_of_interest, ensure_ascii=False)
+            existing.briefing_time = profile.briefing_time
+            self._db.commit()
+            self._db.refresh(existing)
+            return UserProfileMapper.to_entity(existing)
+
+        orm = UserProfileMapper.to_orm(profile)
+        self._db.add(orm)
+        self._db.commit()
+        self._db.refresh(orm)
+        return UserProfileMapper.to_entity(orm)
+
+    def find_interactions_by_account_id(self, account_id: int) -> List[UserInteraction]:
+        orms = self._db.query(UserInteractionORM).filter(
+            UserInteractionORM.account_id == account_id
+        ).order_by(UserInteractionORM.created_at.desc()).all()
+        return [UserInteractionMapper.to_entity(orm) for orm in orms]
+
+    def save_interaction(self, interaction: UserInteraction) -> UserInteraction:
+        orm = UserInteractionMapper.to_orm(interaction)
+        self._db.add(orm)
+        self._db.commit()
+        self._db.refresh(orm)
+        return UserInteractionMapper.to_entity(orm)
+
+    def find_all_account_ids(self) -> List[int]:
+        rows = self._db.query(AccountORM.id).all()
+        return [row.id for row in rows]
+
+    def find_today_interactions(self, account_id: int, target_date: date) -> List[UserInteraction]:
+        start = datetime.combine(target_date, time.min)
+        end = start + timedelta(days=1)
+        orms = self._db.query(UserInteractionORM).filter(
+            UserInteractionORM.account_id == account_id,
+            UserInteractionORM.created_at >= start,
+            UserInteractionORM.created_at < end,
+        ).all()
+        return [UserInteractionMapper.to_entity(orm) for orm in orms]
+
+    def upsert_recently_viewed(self, interaction: UserInteraction) -> UserInteraction:
+        existing = self._db.query(UserInteractionORM).filter(
+            UserInteractionORM.account_id == interaction.account_id,
+            UserInteractionORM.symbol == interaction.symbol,
+            UserInteractionORM.interaction_type == InteractionType.CLICK,
+        ).first()
+
+        if existing:
+            existing.name = interaction.name
+            existing.market = interaction.market
+            existing.created_at = datetime.now()
+            self._db.commit()
+            self._db.refresh(existing)
+            return UserInteractionMapper.to_entity(existing)
+
+        orm = UserInteractionMapper.to_orm(interaction)
+        self._db.add(orm)
+        self._db.commit()
+        self._db.refresh(orm)
+        return UserInteractionMapper.to_entity(orm)
+
+    def enforce_max_recently_viewed(self, account_id: int, max_count: int) -> None:
+        records = self._db.query(UserInteractionORM).filter(
+            UserInteractionORM.account_id == account_id,
+            UserInteractionORM.interaction_type == InteractionType.CLICK,
+        ).order_by(UserInteractionORM.created_at.desc()).all()
+
+        if len(records) > max_count:
+            for record in records[max_count:]:
+                self._db.delete(record)
+            self._db.commit()
+
+    def find_accounts_by_briefing_time(self, hour: int) -> List[int]:
+        rows = self._db.query(UserProfileORM.account_id).filter(
+            UserProfileORM.briefing_time == hour
+        ).all()
+        return [row.account_id for row in rows]
+
+    def update_briefing_time(self, account_id: int, hour: int) -> None:
+        existing = self._db.query(UserProfileORM).filter(
+            UserProfileORM.account_id == account_id
+        ).first()
+        if existing:
+            existing.briefing_time = hour
+        else:
+            self._db.add(UserProfileORM(account_id=account_id, briefing_time=hour))
+        self._db.commit()
+
+    def upsert_clicked_card(self, interaction: UserInteraction) -> UserInteraction:
+        existing = self._db.query(UserInteractionORM).filter(
+            UserInteractionORM.account_id == interaction.account_id,
+            UserInteractionORM.symbol == interaction.symbol,
+            UserInteractionORM.interaction_type == InteractionType.CLICK,
+        ).first()
+
+        if existing:
+            existing.count += 1
+            existing.name = interaction.name
+            existing.market = interaction.market
+            existing.created_at = datetime.now()
+            self._db.commit()
+            self._db.refresh(existing)
+            return UserInteractionMapper.to_entity(existing)
+
+        orm = UserInteractionMapper.to_orm(interaction)
+        self._db.add(orm)
+        self._db.commit()
+        self._db.refresh(orm)
+        return UserInteractionMapper.to_entity(orm)

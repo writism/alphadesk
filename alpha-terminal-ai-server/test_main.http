@@ -1,0 +1,101 @@
+# Test your FastAPI endpoints
+
+GET http://127.0.0.1:8000/
+Accept: application/json
+
+###
+
+GET http://127.0.0.1:8000/hello/User
+Accept: application/json
+
+###
+
+# ============================================================
+# Investment — YouTube 감성 지표 (종목명 기준)
+# account_id 쿠키: 정수 파싱만 수행 → 1 로 통과
+# ============================================================
+
+POST http://localhost:33333/investment/youtube-sentiment
+Content-Type: application/json
+Cookie: account_id=1
+
+{
+  "company": "삼성전자"
+}
+
+###
+
+# Investment — YouTube 감성 지표 (log_id 기준)
+
+POST http://localhost:33333/investment/youtube-sentiment
+Content-Type: application/json
+Cookie: account_id=1
+
+{
+  "log_id": 1
+}
+
+###
+
+# Investment — 투자 판단 (전체 워크플로우)
+
+POST http://localhost:33333/investment/decision
+Content-Type: application/json
+Cookie: account_id=1
+
+{
+  "query": "삼성전자 지금 어때?"
+}
+
+###
+
+### [BL-BE-75] 투자 판단 - 최초 호출 (캐시 미스 → 파이프라인 실행)
+# 응답: cached=false
+POST http://127.0.0.1:33333/investment/decision
+Content-Type: application/json
+Cookie: account_id=1
+
+{
+  "query": "삼성전자 지금 사도 될까?",
+  "symbol": "005930"
+}
+
+###
+
+### [BL-BE-75] 투자 판단 - 재호출 (캐시 히트)
+# 응답: cached=true, cached_at 포함, 응답 속도 빠름
+POST http://127.0.0.1:33333/investment/decision
+Content-Type: application/json
+Cookie: account_id=1
+
+{
+  "query": "삼성전자 지금 사도 될까?",
+  "symbol": "005930"
+}
+
+###
+
+### [BL-BE-75] 투자 판단 - 강제 재분석 (캐시 무시)
+# force=true: 캐시 있어도 파이프라인 재실행
+POST http://127.0.0.1:33333/investment/decision
+Content-Type: application/json
+Cookie: account_id=1
+
+{
+  "query": "삼성전자 지금 사도 될까?",
+  "symbol": "005930",
+  "force": true
+}
+
+###
+
+### [BL-BE-75] 투자 판단 스트림 - SSE 실시간 응답
+POST http://127.0.0.1:33333/investment/decision/stream
+Content-Type: application/json
+Cookie: account_id=1
+
+{
+  "query": "삼성전자 지금 사도 될까?"
+}
+
+###

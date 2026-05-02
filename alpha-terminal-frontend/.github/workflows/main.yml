@@ -1,0 +1,46 @@
+name: Deploy multi-agent-ui via Docker
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  build-and-deploy:
+    if: github.repository_owner == 'writism'
+    runs-on: [self-hosted, multi-agent-ui]
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+
+      - name: Create .env
+        run: echo "${{ secrets.FRONTEND_ENV }}" > .env
+
+      - name: Build image
+        run: |
+          set -a && source .env && set +a
+          docker build -t alphadesk-web:latest . \
+            --build-arg NEXT_PUBLIC_KAKAO_JS_KEY="${NEXT_PUBLIC_KAKAO_JS_KEY:-}" \
+            --build-arg NEXT_PUBLIC_SHARE_BASE_URL="${NEXT_PUBLIC_SHARE_BASE_URL:-}"
+
+      - name: Ensure network
+        run: docker network inspect alphadesk-network >/dev/null 2>&1 || docker network create alphadesk-network
+
+      - name: Replace container
+        run: |
+          docker stop alphadesk-web || true
+          docker rm alphadesk-web || true
+          docker run -d \
+            --name alphadesk-web \
+            -p 3000:3000 \
+            -e BACKEND_URL=http://alphadesk-api:33333 \
+            -e INTERNAL_API_URL=http://alphadesk-api:33333 \
+            --network alphadesk-network \
+            --restart unless-stopped \
+            alphadesk-web:latest
+
+      - name: Health check
+        run: |
+          sleep 5
+          curl -sSf http://localhost:3000/ && echo "alphadesk-web is UP" || docker logs alphadesk-web --tail 100
