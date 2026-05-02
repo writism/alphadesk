@@ -1,8 +1,13 @@
 'use client'
 
 import { useState } from 'react'
+import dynamic from 'next/dynamic'
 import { InvestPage } from '@/features/invest/ui/components/InvestPage'
-import { StockRecommendationPrompt } from '@/features/stock-recommendation/ui/components/StockRecommendationPrompt'
+
+const StockRecommendationPrompt = dynamic(
+    () => import('@/features/stock-recommendation/ui/components/StockRecommendationPrompt').then(m => ({ default: m.StockRecommendationPrompt })),
+    { ssr: false }
+)
 
 type Tab = 'invest' | 'picks'
 
@@ -13,9 +18,11 @@ const TABS: { id: Tab; label: string; desc: string }[] = [
 
 export default function AiInsightPage() {
     const [activeTab, setActiveTab] = useState<Tab>('invest')
+    const [visitedTabs, setVisitedTabs] = useState<Set<Tab>>(new Set(['invest']))
 
     const switchTab = (tab: Tab) => {
         setActiveTab(tab)
+        setVisitedTabs(prev => new Set([...prev, tab]))
         window.scrollTo({ top: 0 })
     }
 
@@ -50,7 +57,7 @@ export default function AiInsightPage() {
                 <InvestPage />
             </div>
             <div className={activeTab === 'picks' ? 'block' : 'hidden'}>
-                <StockRecommendationPrompt />
+                {visitedTabs.has('picks') && <StockRecommendationPrompt />}
             </div>
         </div>
     )

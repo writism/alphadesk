@@ -11,10 +11,10 @@ class SerpNewsSearchAdapter(NewsSearchPort):
         self._hl = hl
         self._gl = gl
 
-    def search(self, keyword: str, page: int, page_size: int) -> Tuple[List[NewsArticle], int]:
+    async def search(self, keyword: str, page: int, page_size: int) -> Tuple[List[NewsArticle], int]:
         start = (page - 1) * page_size
 
-        data = self._client.get({
+        data = await self._client.get({
             "engine": "google_news",
             "q": keyword,
             "hl": self._hl,

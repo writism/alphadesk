@@ -16,9 +16,14 @@ from app.domains.stock.application.usecase.daily_returns_heatmap_usecase import 
 from app.domains.stock.application.usecase.search_stock_usecase import SearchStockUseCase
 from app.domains.stock.application.usecase.sync_corp_code_usecase import SyncCorpCodeUseCase
 from app.domains.stock.application.usecase.sync_market_usecase import SyncMarketUseCase
+from app.infrastructure.cache.db_cache import get_cached, set_cached
+from app.infrastructure.cache.redis_client import redis_client
 from app.infrastructure.config.settings import get_settings
 from app.infrastructure.database.session import get_db
 from sqlalchemy.orm import Session
+
+_STOCK_SEARCH_TTL = 600   # 10분
+_STOCK_DETAIL_TTL = 300   # 5분
 
 
 class StockDetailResponse(BaseModel):
@@ -41,9 +46,16 @@ async def search_stocks(
     q: str = Query(min_length=1),
     db: Session = Depends(get_db),
 ):
+    cache_key = f"alphadesk:stock:search:v1:{q.lower()}"
+    cached = get_cached(redis_client, cache_key)
+    if cached is not None:
+        return [StockResponse.model_validate(item) for item in cached]
+
     settings = get_settings()
     usecase = SearchStockUseCase(StockRepositoryImpl(db), settings.finnhub_api_key)
-    return usecase.execute(q)
+    result = usecase.execute(q)
+    set_cached(redis_client, cache_key, [item.model_dump(mode="json") for item in result], _STOCK_SEARCH_TTL)
+    return result
 
 
 @router.get("/daily-returns-heatmap", response_model=DailyReturnsHeatmapResponse)
@@ -91,16 +103,23 @@ async def sync_market(db: Session = Depends(get_db)):
 
 
 @router.get("/{symbol}", response_model=StockDetailResponse)
-def get_stock_detail(symbol: str, db: Session = Depends(get_db)):
+async def get_stock_detail(symbol: str, db: Session = Depends(get_db)):
     """종목 상세 — 기본 정보 + AI 분석 이력 최근 20건."""
     symbol = symbol.strip().upper()
+    cache_key = f"alphadesk:stock:detail:v1:{symbol}"
+    cached = get_cached(redis_client, cache_key)
+    if cached is not None:
+        return StockDetailResponse.model_validate(cached)
+
     stock = StockRepositoryImpl(db).find_by_symbol(symbol)
     if not stock:
         raise HTTPException(status_code=404, detail="종목을 찾을 수 없습니다.")
     logs = AnalysisLogRepositoryImpl(db).find_by_symbol(symbol, limit=20)
-    return StockDetailResponse(
+    result = StockDetailResponse(
         symbol=stock.symbol,
         name=stock.name,
         market=stock.market,
         analysis_logs=logs,
     )
+    set_cached(redis_client, cache_key, result.model_dump(mode="json"), _STOCK_DETAIL_TTL)
+    return result

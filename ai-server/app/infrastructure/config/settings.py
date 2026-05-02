@@ -7,13 +7,16 @@ class Settings(BaseSettings):
     mysql_host: str
     mysql_port: int
     mysql_database: str
+    mysql_pool_size: int = 10
+    mysql_max_overflow: int = 20
+    mysql_pool_recycle: int = 3600  # 유휴 연결 갱신 주기(초) — MySQL wait_timeout 방어
     # BL-BE-54: PostgreSQL — 비정형 데이터 저장용
     pg_host: str = "postgres"
     pg_port: int = 5432
     pg_user: str = "eddi"
     pg_password: str = ""
     pg_database: str = "appdb"
-    pg_pool_size: int = 5
+    pg_pool_size: int = 10
     pg_max_overflow: int = 20
     redis_host: str = "redis"
     redis_port: int = 6379

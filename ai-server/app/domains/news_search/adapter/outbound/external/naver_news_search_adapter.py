@@ -1,3 +1,4 @@
+import asyncio
 import logging
 import re
 from html import unescape
@@ -26,11 +27,12 @@ def _clean(text: str) -> str:
 class NaverNewsSearchAdapter(NewsSearchPort):
     BASE_URL = "https://search.naver.com/search.naver"
 
-    def search(self, keyword: str, page: int, page_size: int) -> Tuple[List[NewsArticle], int]:
-        params = {"where": "news", "query": keyword, "sm": "tab_jum"}
+    async def search(self, keyword: str, page: int, page_size: int) -> Tuple[List[NewsArticle], int]:
         url = f"{self.BASE_URL}?where=news&query={quote(keyword)}&sm=tab_jum"
 
-        response = httpx.get(url, headers=_HEADERS, timeout=10.0, follow_redirects=True)
+        response = await asyncio.to_thread(
+            httpx.get, url, headers=_HEADERS, timeout=10.0, follow_redirects=True
+        )
         response.raise_for_status()
         html = response.text
 

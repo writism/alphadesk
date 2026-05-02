@@ -15,7 +15,7 @@ from app.domains.pipeline.application.response.run_pipeline_result import RunPip
 from app.domains.pipeline.application.response.stock_summary_response import StockSummaryResponse
 from app.domains.pipeline.application.usecase.run_pipeline_usecase import RunPipelineUseCase
 from app.domains.stock_analyzer.adapter.outbound.external.openai_analyzer_adapter import OpenAIAnalyzerAdapter
-from app.domains.stock_analyzer.adapter.outbound.in_memory.article_analysis_repository_impl import InMemoryArticleAnalysisRepository
+from app.domains.stock_analyzer.adapter.outbound.factory import get_analysis_repository
 from app.domains.stock_analyzer.application.usecase.get_or_create_analysis_usecase import GetOrCreateAnalysisUseCase
 from app.domains.stock_collector.adapter.outbound.external.dart_collector_adapter import DartCollectorAdapter
 from app.domains.stock_collector.adapter.outbound.external.dart_report_collector_adapter import DartReportCollectorAdapter
@@ -33,7 +33,7 @@ from app.infrastructure.database.session import get_db
 router = APIRouter(prefix="/pipeline", tags=["pipeline"])
 
 _settings = get_settings()
-_analysis_repository = InMemoryArticleAnalysisRepository()
+_analysis_repository = get_analysis_repository()
 
 
 def _log_to_summary(log) -> StockSummaryResponse:
@@ -140,6 +140,7 @@ async def run_pipeline_stream(
                     "processed": result.processed,
                 })
             except Exception as e:
+                logger.exception("[Pipeline] SSE 실행 중 오류 account_id=%s", parsed_account_id)
                 await queue.put({"type": "error", "at": datetime.now(timezone.utc).isoformat(), "message": str(e)})
             finally:
                 local_db.close()

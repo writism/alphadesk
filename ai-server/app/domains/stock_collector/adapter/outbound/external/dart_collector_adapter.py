@@ -1,4 +1,5 @@
-import time
+import asyncio
+import logging
 from datetime import datetime, timedelta
 from hashlib import sha256
 from typing import List
@@ -9,11 +10,13 @@ from app.domains.stock_collector.application.usecase.collector_port import Colle
 from app.domains.stock_collector.domain.entity.raw_article import RawArticle
 from app.infrastructure.config.settings import get_settings
 
+logger = logging.getLogger(__name__)
+
 
 class DartCollectorAdapter(CollectorPort):
     DART_API_URL = "https://opendart.fss.or.kr/api/list.json"
 
-    def collect(self, symbol: str, stock_name: str, corp_code: str) -> List[RawArticle]:
+    async def collect(self, symbol: str, stock_name: str, corp_code: str) -> List[RawArticle]:
         settings = get_settings()
 
         params = {
@@ -26,23 +29,20 @@ class DartCollectorAdapter(CollectorPort):
         }
 
         try:
-            time.sleep(1)
-            response = httpx.get(self.DART_API_URL, params=params, timeout=10.0)
+            await asyncio.sleep(1)
+            response = await asyncio.to_thread(httpx.get, self.DART_API_URL, params=params, timeout=10.0)
             response.raise_for_status()
             data = response.json()
         except httpx.TimeoutException:
-            import logging
-            logging.getLogger(__name__).warning(f"[DartCollector] 요청 타임아웃: symbol={symbol}")
+            logger.warning(f"[DartCollector] 요청 타임아웃: symbol={symbol}")
             return []
         except httpx.HTTPError as e:
-            import logging
-            logging.getLogger(__name__).warning(f"[DartCollector] API 요청 실패: symbol={symbol}, error={e}")
+            logger.warning(f"[DartCollector] API 요청 실패: symbol={symbol}, error={e}")
             return []
 
         dart_status = data.get("status")
         if dart_status != "000":
-            import logging
-            logging.getLogger(__name__).info(f"[DartCollector] 공시 없음: symbol={symbol}, dart_status={dart_status}")
+            logger.info(f"[DartCollector] 공시 없음: symbol={symbol}, dart_status={dart_status}")
             return []
 
         articles = []

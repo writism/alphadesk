@@ -1,4 +1,5 @@
 import type { NextConfig } from "next";
+import withBundleAnalyzer from "@next/bundle-analyzer";
 
 const securityHeaders = [
     {
@@ -35,10 +36,6 @@ const securityHeaders = [
 const nextConfig: NextConfig = {
     devIndicators: false,
     output: "standalone",
-    experimental: {
-        workerThreads: false,
-        cpus: 1,
-    },
     async headers() {
         return [
             {
@@ -49,4 +46,4 @@ const nextConfig: NextConfig = {
     },
 };
 
-export default nextConfig;
+export default withBundleAnalyzer({ enabled: process.env.ANALYZE === "true" })(nextConfig);

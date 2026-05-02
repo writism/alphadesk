@@ -1,3 +1,4 @@
+import asyncio
 import datetime
 import logging
 import re
@@ -33,12 +34,13 @@ class NaverBlogCafeCollectorAdapter(CollectorPort):
             "X-Naver-Client-Secret": settings.naver_secret,
         }
 
-    def collect(self, symbol: str, stock_name: str, corp_code: str) -> List[RawArticle]:
-        return self._fetch(self.NEWS_URL, "NAVER_NEWS_API", symbol, stock_name)
+    async def collect(self, symbol: str, stock_name: str, corp_code: str) -> List[RawArticle]:
+        return await self._fetch(self.NEWS_URL, "NAVER_NEWS_API", symbol, stock_name)
 
-    def _fetch(self, url: str, source_name: str, symbol: str, stock_name: str) -> List[RawArticle]:
+    async def _fetch(self, url: str, source_name: str, symbol: str, stock_name: str) -> List[RawArticle]:
         try:
-            response = httpx.get(
+            response = await asyncio.to_thread(
+                httpx.get,
                 url,
                 params={"query": stock_name, "display": self.MAX_RESULTS, "sort": "date"},
                 headers=self._headers,

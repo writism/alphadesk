@@ -15,6 +15,15 @@ export default function ClientShell({ children }: { children: React.ReactNode })
         mainRef.current?.scrollTo({ top: 0 })
     }, [pathname])
 
+    useEffect(() => {
+        function handleUnhandledRejection(event: PromiseRejectionEvent) {
+            console.error("[UnhandledRejection]", event.reason)
+            event.preventDefault()
+        }
+        window.addEventListener("unhandledrejection", handleUnhandledRejection)
+        return () => window.removeEventListener("unhandledrejection", handleUnhandledRejection)
+    }, [])
+
     return (
         <>
             <TopBar />

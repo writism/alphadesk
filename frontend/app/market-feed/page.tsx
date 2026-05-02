@@ -2,10 +2,15 @@
 
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
+import dynamic from 'next/dynamic'
 import { useAtomValue } from 'jotai'
 import { authStateAtom } from '@/features/auth/application/atoms/authAtom'
 import { NewsListPage } from '@/features/news/ui/components/NewsListPage'
-import { YoutubeVideoFeed } from '@/features/youtube/ui/components/YoutubeVideoFeed'
+
+const YoutubeVideoFeed = dynamic(
+    () => import('@/features/youtube/ui/components/YoutubeVideoFeed').then(m => ({ default: m.YoutubeVideoFeed })),
+    { ssr: false }
+)
 
 type Tab = 'news' | 'videos'
 
@@ -18,6 +23,7 @@ export default function MarketFeedPage() {
     const authState = useAtomValue(authStateAtom)
     const router = useRouter()
     const [activeTab, setActiveTab] = useState<Tab>('news')
+    const [visitedTabs, setVisitedTabs] = useState<Set<Tab>>(new Set(['news']))
 
     useEffect(() => {
         if (authState.status === 'PENDING_TERMS') {
@@ -27,6 +33,7 @@ export default function MarketFeedPage() {
 
     const switchTab = (tab: Tab) => {
         setActiveTab(tab)
+        setVisitedTabs(prev => new Set([...prev, tab]))
         window.scrollTo({ top: 0 })
     }
 
@@ -61,7 +68,7 @@ export default function MarketFeedPage() {
                 <NewsListPage />
             </div>
             <div className={activeTab === 'videos' ? 'block' : 'hidden'}>
-                <YoutubeVideoFeed />
+                {visitedTabs.has('videos') && <YoutubeVideoFeed />}
             </div>
         </div>
     )

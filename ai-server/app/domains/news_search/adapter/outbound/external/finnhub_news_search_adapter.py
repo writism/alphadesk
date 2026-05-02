@@ -1,3 +1,4 @@
+import asyncio
 import datetime
 import logging
 from typing import List, Tuple
@@ -14,7 +15,7 @@ logger = logging.getLogger(__name__)
 class FinnhubNewsSearchAdapter(NewsSearchPort):
     API_URL = "https://finnhub.io/api/v1/company-news"
 
-    def search(self, keyword: str, page: int, page_size: int) -> Tuple[List[NewsArticle], int]:
+    async def search(self, keyword: str, page: int, page_size: int) -> Tuple[List[NewsArticle], int]:
         settings = get_settings()
         today = datetime.date.today()
         from_date = (today - datetime.timedelta(days=90)).strftime("%Y-%m-%d")
@@ -27,7 +28,7 @@ class FinnhubNewsSearchAdapter(NewsSearchPort):
             "token": settings.finnhub_api_key,
         }
 
-        response = httpx.get(self.API_URL, params=params, timeout=10.0)
+        response = await asyncio.to_thread(httpx.get, self.API_URL, params=params, timeout=10.0)
         response.raise_for_status()
         data = response.json()
 

@@ -11,8 +11,15 @@ from app.domains.watchlist.application.response.watchlist_response import Watchl
 from app.domains.watchlist.application.usecase.add_watchlist_usecase import AddWatchlistUseCase
 from app.domains.watchlist.application.usecase.get_watchlist_usecase import GetWatchlistUseCase
 from app.domains.watchlist.application.usecase.remove_watchlist_usecase import RemoveWatchlistUseCase
+from app.infrastructure.cache.db_cache import get_cached, invalidate_cached, set_cached
 from app.infrastructure.cache.redis_client import redis_client
 from app.infrastructure.database.session import get_db
+
+_WATCHLIST_TTL = 120  # 2분
+
+
+def _watchlist_cache_key(account_id: int) -> str:
+    return f"alphadesk:watchlist:v1:{account_id}"
 
 router = APIRouter(prefix="/watchlist", tags=["watchlist"])
 
@@ -53,7 +60,9 @@ async def add_watchlist(
     repository = WatchlistRepositoryImpl(db)
     usecase = AddWatchlistUseCase(repository)
     try:
-        return usecase.execute(request, account_id=aid)
+        result = usecase.execute(request, account_id=aid)
+        invalidate_cached(redis_client, _watchlist_cache_key(aid))
+        return result
     except ValueError as e:
         raise HTTPException(status_code=409, detail=str(e))
 
@@ -68,9 +77,16 @@ async def get_watchlist(
     if aid is None:
         raise HTTPException(status_code=401, detail="로그인이 필요합니다.")
 
+    cache_key = _watchlist_cache_key(aid)
+    cached = get_cached(redis_client, cache_key)
+    if cached is not None:
+        return [WatchlistItemResponse.model_validate(item) for item in cached]
+
     repository = WatchlistRepositoryImpl(db)
     usecase = GetWatchlistUseCase(repository)
-    return usecase.execute(account_id=aid)
+    result = usecase.execute(account_id=aid)
+    set_cached(redis_client, cache_key, [item.model_dump(mode="json") for item in result], _WATCHLIST_TTL)
+    return result
 
 
 @router.delete("/{item_id}", status_code=204)
@@ -95,5 +111,6 @@ async def remove_watchlist(
     usecase = RemoveWatchlistUseCase(repository)
     try:
         usecase.execute(item_id)
+        invalidate_cached(redis_client, _watchlist_cache_key(aid))
     except ValueError as e:
         raise HTTPException(status_code=404, detail=str(e))

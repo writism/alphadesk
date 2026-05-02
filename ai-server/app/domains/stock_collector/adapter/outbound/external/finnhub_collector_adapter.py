@@ -1,3 +1,4 @@
+import asyncio
 import datetime
 import logging
 import re
@@ -18,7 +19,7 @@ _KR_CODE = re.compile(r"^\d{6}$")
 class FinnhubCollectorAdapter(CollectorPort):
     API_URL = "https://finnhub.io/api/v1/company-news"
 
-    def collect(self, symbol: str, stock_name: str = "", corp_code: str = "") -> List[RawArticle]:
+    async def collect(self, symbol: str, stock_name: str = "", corp_code: str = "") -> List[RawArticle]:
         if _KR_CODE.match(symbol):
             return []
 
@@ -35,7 +36,7 @@ class FinnhubCollectorAdapter(CollectorPort):
         }
 
         try:
-            response = httpx.get(self.API_URL, params=params, timeout=10.0)
+            response = await asyncio.to_thread(httpx.get, self.API_URL, params=params, timeout=10.0)
             response.raise_for_status()
             data = response.json()
         except httpx.HTTPError as e:

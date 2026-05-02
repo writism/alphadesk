@@ -1,3 +1,4 @@
+import asyncio
 import datetime
 import logging
 from hashlib import sha256
@@ -21,11 +22,12 @@ class TwitterCollectorAdapter(CollectorPort):
             raise ValueError("TWITTER_BEARER_TOKEN 환경변수가 설정되지 않았습니다.")
         self._client = tweepy.Client(bearer_token=token, wait_on_rate_limit=False)
 
-    def collect(self, symbol: str, stock_name: str, corp_code: str) -> List[RawArticle]:
+    async def collect(self, symbol: str, stock_name: str, corp_code: str) -> List[RawArticle]:
         query = f'"{stock_name}" OR "${symbol}" -is:retweet lang:ko'
 
         try:
-            response = self._client.search_recent_tweets(
+            response = await asyncio.to_thread(
+                self._client.search_recent_tweets,
                 query=query,
                 max_results=self.MAX_RESULTS,
                 tweet_fields=["created_at", "author_id", "text"],

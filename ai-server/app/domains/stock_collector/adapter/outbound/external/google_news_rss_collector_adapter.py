@@ -1,3 +1,4 @@
+import asyncio
 import datetime
 import logging
 from hashlib import sha256
@@ -19,12 +20,12 @@ class GoogleNewsRssCollectorAdapter(CollectorPort):
     BASE_URL = "https://news.google.com/rss/search"
     MAX_RESULTS = 10
 
-    def collect(self, symbol: str, stock_name: str, corp_code: str) -> List[RawArticle]:
+    async def collect(self, symbol: str, stock_name: str, corp_code: str) -> List[RawArticle]:
         query = quote(stock_name)
         url = f"{self.BASE_URL}?q={query}&hl=ko&gl=KR&ceid=KR:ko"
 
         try:
-            response = httpx.get(url, headers=_HEADERS, timeout=10.0)
+            response = await asyncio.to_thread(httpx.get, url, headers=_HEADERS, timeout=10.0)
             response.raise_for_status()
         except httpx.HTTPError as e:
             logger.warning("[GoogleNewsRSS] 요청 실패: %s", e)

@@ -5,8 +5,8 @@
 - 네트워크 오류·타임아웃에 대한 재시도(3회, 지수 백오프) 정책
 - Base URL 교체는 SERP_BASE_URL 환경 변수 변경만으로 가능
 """
+import asyncio
 import logging
-import time
 from typing import Any, Dict
 
 import httpx
@@ -28,8 +28,8 @@ class SerpApiError(Exception):
 
 
 class SerpClient:
-    # 프로세스 전역에서 재사용되는 httpx.Client (커넥션 풀링으로 TLS/TCP 재연결 비용 제거)
-    _shared_client: httpx.Client | None = None
+    # 프로세스 전역에서 재사용되는 httpx.AsyncClient (커넥션 풀링으로 TLS/TCP 재연결 비용 제거)
+    _shared_client: httpx.AsyncClient | None = None
 
     def __init__(self) -> None:
         settings = get_settings()
@@ -38,22 +38,22 @@ class SerpClient:
         self._timeout = settings.serp_timeout
 
     @classmethod
-    def _get_client(cls) -> httpx.Client:
+    def _get_client(cls) -> httpx.AsyncClient:
         if cls._shared_client is None:
-            cls._shared_client = httpx.Client(
+            cls._shared_client = httpx.AsyncClient(
                 timeout=get_settings().serp_timeout,
                 limits=httpx.Limits(max_connections=20, max_keepalive_connections=10),
             )
         return cls._shared_client
 
     @classmethod
-    def close(cls) -> None:
+    async def aclose(cls) -> None:
         """BL-BE-85: lifespan shutdown 에서 호출 — 커넥션 풀 정리."""
         if cls._shared_client is not None:
-            cls._shared_client.close()
+            await cls._shared_client.aclose()
             cls._shared_client = None
 
-    def get(self, params: Dict[str, Any]) -> Dict[str, Any]:
+    async def get(self, params: Dict[str, Any]) -> Dict[str, Any]:
         """SERP API GET 요청. 재시도 포함. 인증 파라미터 자동 주입."""
         all_params = {**params, "api_key": self._api_key}
         client = self._get_client()
@@ -61,7 +61,7 @@ class SerpClient:
         last_exc: Exception | None = None
         for attempt in range(1, _MAX_RETRIES + 1):
             try:
-                response = client.get(self._base_url, params=all_params, timeout=self._timeout)
+                response = await client.get(self._base_url, params=all_params, timeout=self._timeout)
                 response.raise_for_status()
                 return response.json()
             except httpx.HTTPStatusError as e:
@@ -85,6 +85,6 @@ class SerpClient:
                 )
                 last_exc = e
                 if attempt < _MAX_RETRIES:
-                    time.sleep(_RETRY_BACKOFF_BASE * (2 ** (attempt - 1)))
+                    await asyncio.sleep(_RETRY_BACKOFF_BASE * (2 ** (attempt - 1)))
 
         raise SerpApiError(f"SERP API 재시도 {_MAX_RETRIES}회 실패: {last_exc}") from last_exc

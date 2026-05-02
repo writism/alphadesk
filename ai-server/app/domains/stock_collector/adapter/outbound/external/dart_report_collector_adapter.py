@@ -1,5 +1,5 @@
+import asyncio
 import logging
-import time
 from datetime import datetime
 from hashlib import sha256
 from typing import List, Optional, Tuple
@@ -47,7 +47,7 @@ def _format_amount(value: str) -> str:
 class DartReportCollectorAdapter(CollectorPort):
     DART_FINANCIAL_URL = "https://opendart.fss.or.kr/api/fnlttSinglAcnt.json"
 
-    def collect(self, symbol: str, stock_name: str, corp_code: str) -> List[RawArticle]:
+    async def collect(self, symbol: str, stock_name: str, corp_code: str) -> List[RawArticle]:
         if not corp_code:
             logger.warning(f"[DartReport] corp_code 없음: {symbol}")
             return []
@@ -58,7 +58,7 @@ class DartReportCollectorAdapter(CollectorPort):
 
         # 가장 최근 기간 먼저, 없으면 전년도 같은 기간 시도
         for bsns_year in [now.year, now.year - 1]:
-            article = self._fetch_report_article(
+            article = await self._fetch_report_article(
                 api_key=settings.dart_api_key,
                 corp_code=corp_code,
                 symbol=symbol,
@@ -72,7 +72,7 @@ class DartReportCollectorAdapter(CollectorPort):
         logger.warning(f"[DartReport] {symbol} 재무데이터 없음")
         return []
 
-    def _fetch_report_article(
+    async def _fetch_report_article(
         self,
         api_key: str,
         corp_code: str,
@@ -90,8 +90,8 @@ class DartReportCollectorAdapter(CollectorPort):
                 "fs_div": fs_div,
             }
             try:
-                time.sleep(1)
-                resp = httpx.get(self.DART_FINANCIAL_URL, params=params, timeout=15.0)
+                await asyncio.sleep(1)
+                resp = await asyncio.to_thread(httpx.get, self.DART_FINANCIAL_URL, params=params, timeout=15.0)
                 resp.raise_for_status()
                 data = resp.json()
             except httpx.TimeoutException:

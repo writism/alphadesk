@@ -4,7 +4,7 @@ from app.domains.stock_analyzer.adapter.outbound.external.openai_analyzer_adapte
 from app.domains.stock_analyzer.adapter.outbound.external.openai_keyword_adapter import OpenAIKeywordAdapter
 from app.domains.stock_analyzer.adapter.outbound.external.openai_risk_tag_adapter import OpenAIRiskTagAdapter
 from app.domains.stock_analyzer.adapter.outbound.external.openai_sentiment_adapter import OpenAISentimentAdapter
-from app.domains.stock_analyzer.adapter.outbound.in_memory.article_analysis_repository_impl import InMemoryArticleAnalysisRepository
+from app.domains.stock_analyzer.adapter.outbound.factory import get_analysis_repository
 from app.domains.stock_analyzer.application.request.analyze_article_request import AnalyzeArticleRequest
 from app.domains.stock_analyzer.application.response.article_analysis_response import ArticleAnalysisResponse
 from app.domains.stock_analyzer.application.response.keyword_extraction_response import KeywordExtractionResponse
@@ -21,7 +21,7 @@ from app.infrastructure.config.settings import get_settings
 router = APIRouter(prefix="/analyzer", tags=["analyzer"])
 
 _settings = get_settings()
-_analysis_repository = InMemoryArticleAnalysisRepository()
+_analysis_repository = get_analysis_repository()
 
 _analyze_article_usecase = AnalyzeArticleUseCase(
     analyzer_port=OpenAIAnalyzerAdapter(api_key=_settings.openai_api_key),

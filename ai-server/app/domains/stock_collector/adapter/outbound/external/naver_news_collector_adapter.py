@@ -1,3 +1,4 @@
+import asyncio
 import datetime
 import logging
 import re
@@ -45,7 +46,7 @@ def _clean(text: str) -> str:
 class NaverNewsCollectorAdapter(CollectorPort):
     BASE_URL = "https://search.naver.com/search.naver"
 
-    def collect(self, symbol: str, stock_name: str = "", corp_code: str = "") -> List[RawArticle]:
+    async def collect(self, symbol: str, stock_name: str = "", corp_code: str = "") -> List[RawArticle]:
         if not _KR_CODE.match(symbol):
             return []
 
@@ -53,7 +54,9 @@ class NaverNewsCollectorAdapter(CollectorPort):
         url = f"{self.BASE_URL}?where=news&query={quote(keyword)}&sm=tab_jum"
 
         try:
-            response = httpx.get(url, headers=_HEADERS, timeout=10.0, follow_redirects=True)
+            response = await asyncio.to_thread(
+                httpx.get, url, headers=_HEADERS, timeout=10.0, follow_redirects=True
+            )
             response.raise_for_status()
             html = response.text
         except httpx.HTTPError as e:

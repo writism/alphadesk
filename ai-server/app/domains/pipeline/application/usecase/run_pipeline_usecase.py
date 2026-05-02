@@ -146,7 +146,7 @@ class RunPipelineUseCase:
             })
             try:
                 collect_usecase = CollectArticlesUseCase(self._raw_article_repository, self._collectors, self._stock_repository)
-                await asyncio.to_thread(collect_usecase.execute, symbol)
+                await collect_usecase.execute(symbol)
             except Exception as e:
                 logger.error(f"[Pipeline] {name}({symbol}) 수집 중 오류: {e}")
                 await _emit(on_event, {

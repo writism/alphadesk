@@ -1,3 +1,4 @@
+import asyncio
 import logging
 from typing import List, Optional
 
@@ -20,7 +21,7 @@ class CollectArticlesUseCase:
         self._collectors = collectors
         self._stock_repository = stock_repository
 
-    def execute(self, symbol: str) -> CollectResponse:
+    async def execute(self, symbol: str) -> CollectResponse:
         # DB에서 종목 정보 조회
         stock_name = symbol
         corp_code = ""
@@ -34,14 +35,22 @@ class CollectArticlesUseCase:
                 logger.warning(f"[Collector] stocks 테이블에 미등록 심볼: {symbol} — 수집을 건너뜁니다.")
                 return CollectResponse(symbol=symbol, total_collected=0, total_skipped=0, items=[])
 
+        # 모든 collector를 병렬로 실행
+        all_results: list[List[RawArticle]] = await asyncio.gather(
+            *[collector.collect(symbol, stock_name, corp_code) for collector in self._collectors],
+            return_exceptions=True,
+        )
+
         collected_items = []
         total_collected = 0
         total_skipped = 0
 
-        for collector in self._collectors:
-            articles = collector.collect(symbol, stock_name, corp_code)
+        for result in all_results:
+            if isinstance(result, Exception):
+                logger.error(f"[Collector] {symbol} 수집 중 오류: {result}")
+                continue
 
-            for article in articles:
+            for article in result:
                 existing = self._repository.find_by_dedup_key(
                     article.source_type, article.source_doc_id
                 )

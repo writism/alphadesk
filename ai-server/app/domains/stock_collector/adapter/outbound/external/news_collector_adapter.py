@@ -1,6 +1,6 @@
+import asyncio
 import logging
 import re
-import time
 from datetime import datetime
 from hashlib import sha256
 from typing import List
@@ -33,7 +33,7 @@ _STOCK_CODE_PATTERN = re.compile(r"^\d{6}$|^[A-Z]{1,5}(\.B)?$")
 class NewsCollectorAdapter(CollectorPort):
     SERP_API_URL = "https://serpapi.com/search"
 
-    def collect(self, symbol: str, stock_name: str, corp_code: str) -> List[RawArticle]:
+    async def collect(self, symbol: str, stock_name: str, corp_code: str) -> List[RawArticle]:
         if not _STOCK_CODE_PATTERN.match(symbol):
             logger.warning(f"[NewsCollector] symbol이 코드 형식이 아닙니다: '{symbol}' — 수집을 건너뜁니다.")
             return []
@@ -41,17 +41,17 @@ class NewsCollectorAdapter(CollectorPort):
         settings = get_settings()
         korean_keyword = stock_name
 
-        articles = self._fetch(symbol, korean_keyword, settings)
+        articles = await self._fetch(symbol, korean_keyword, settings)
 
         if not articles:
             english_keyword = SYMBOL_TO_ENGLISH.get(symbol)
             if english_keyword:
                 logger.debug(f"[NewsCollector] 한글 검색 결과 없음, 영문 fallback: '{english_keyword}'")
-                articles = self._fetch(symbol, english_keyword, settings)
+                articles = await self._fetch(symbol, english_keyword, settings)
 
         return articles
 
-    def _fetch(self, symbol: str, keyword: str, settings) -> List[RawArticle]:
+    async def _fetch(self, symbol: str, keyword: str, settings) -> List[RawArticle]:
         params = {
             "engine": "google_news",
             "q": keyword,
@@ -60,8 +60,8 @@ class NewsCollectorAdapter(CollectorPort):
         }
 
         try:
-            time.sleep(1)
-            response = httpx.get(self.SERP_API_URL, params=params, timeout=10.0)
+            await asyncio.sleep(1)
+            response = await asyncio.to_thread(httpx.get, self.SERP_API_URL, params=params, timeout=10.0)
             response.raise_for_status()
             data = response.json()
         except httpx.HTTPError as e:

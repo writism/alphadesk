@@ -1,7 +1,6 @@
 from typing import Optional
 
 from fastapi import APIRouter, Query
-from fastapi.concurrency import run_in_threadpool
 
 from app.domains.news_search.adapter.outbound.external.composite_news_search_adapter import CompositeNewsSearchAdapter
 from app.domains.news_search.adapter.outbound.external.finnhub_news_search_adapter import FinnhubNewsSearchAdapter
@@ -38,7 +37,7 @@ async def search_news(
 
     adapter = _build_adapter(market)
     usecase = SearchNewsUseCase(adapter)
-    result: SearchNewsResponse = await run_in_threadpool(usecase.execute, keyword, page, page_size)
+    result: SearchNewsResponse = await usecase.execute(keyword, page, page_size)
 
     set_news_cache(redis_client, keyword, market, page, page_size, result.model_dump())
     return result

@@ -43,7 +43,7 @@ async def collect_articles(request: CollectRequest, db: Session = Depends(get_db
     stock_repository = StockRepositoryImpl(db)
     collectors = [DartCollectorAdapter(), DartReportCollectorAdapter(), NewsCollectorAdapter(), GoogleNewsRssCollectorAdapter()]
     usecase = CollectArticlesUseCase(repository, collectors, stock_repository=stock_repository)
-    return usecase.execute(request.symbol)
+    return await usecase.execute(request.symbol)
 
 
 @router.post("/admin/migrate-symbols")

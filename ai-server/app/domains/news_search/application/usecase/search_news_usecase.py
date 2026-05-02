@@ -9,8 +9,8 @@ class SearchNewsUseCase:
     def __init__(self, news_search_port: NewsSearchPort):
         self._news_search_port = news_search_port
 
-    def execute(self, keyword: str, page: int, page_size: int) -> SearchNewsResponse:
-        articles, total_count = self._news_search_port.search(keyword, page, page_size)
+    async def execute(self, keyword: str, page: int, page_size: int) -> SearchNewsResponse:
+        articles, total_count = await self._news_search_port.search(keyword, page, page_size)
 
         items = [
             NewsArticleItem(
