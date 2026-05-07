@@ -3,9 +3,11 @@ import json
 from datetime import datetime, timezone
 from typing import AsyncGenerator, List, Optional
 
-from fastapi import APIRouter, Cookie, Depends, Response
+from fastapi import APIRouter, Depends, Response
 from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
+
+from app.infrastructure.auth.require_user import require_user_optional
 
 from app.domains.pipeline.adapter.outbound.persistence.analysis_log_repository_impl import AnalysisLogRepositoryImpl
 from app.domains.pipeline.adapter.outbound.state.factory import get_progress_store, get_summary_registry
@@ -80,21 +82,20 @@ def _build_usecase(db: Session) -> RunPipelineUseCase:
 async def run_pipeline(
     request: RunPipelineRequest | None = None,
     db: Session = Depends(get_db),
-    account_id: Optional[str] = Cookie(default=None),
+    account_id: Optional[int] = Depends(require_user_optional),
 ):
-    parsed_account_id = int(account_id) if account_id else None
     selected_symbols = request.symbols if request and request.symbols else None
     article_mode = request.article_mode if request else ArticleMode.LATEST_3
     result = await _build_usecase(db).execute(
         selected_symbols=selected_symbols,
-        account_id=parsed_account_id,
+        account_id=account_id,
         article_mode=article_mode,
     )
 
-    get_summary_registry().put_all(parsed_account_id, result.summaries)
+    get_summary_registry().put_all(account_id, result.summaries)
 
     log_repo = AnalysisLogRepositoryImpl(db)
-    log_repo.save_all(result.logs, account_id=parsed_account_id)
+    log_repo.save_all(result.logs, account_id=account_id)
 
     # BL-BE-86: RunPipelineResponse DTO 로 명시적 반환
     return RunPipelineResponse(message=result.message, processed=result.processed)
@@ -104,12 +105,11 @@ async def run_pipeline(
 async def run_pipeline_stream(
     request: RunPipelineRequest | None = None,
     db: Session = Depends(get_db),
-    account_id: Optional[str] = Cookie(default=None),
+    account_id: Optional[int] = Depends(require_user_optional),
 ):
     if account_id is None:
         return Response(status_code=401)
 
-    parsed_account_id = int(account_id)
     selected_symbols = request.symbols if request and request.symbols else None
     article_mode = request.article_mode if request else ArticleMode.LATEST_3
 
@@ -126,13 +126,13 @@ async def run_pipeline_stream(
             try:
                 result = await _build_usecase(local_db).execute(
                     selected_symbols=selected_symbols,
-                    account_id=parsed_account_id,
+                    account_id=account_id,
                     on_event=on_event,
                     article_mode=article_mode,
                 )
-                get_summary_registry().put_all(parsed_account_id, result.summaries)
+                get_summary_registry().put_all(account_id, result.summaries)
                 log_repo = AnalysisLogRepositoryImpl(local_db)
-                log_repo.save_all(result.logs, account_id=parsed_account_id)
+                log_repo.save_all(result.logs, account_id=account_id)
                 await queue.put({
                     "type": "done",
                     "at": datetime.now(timezone.utc).isoformat(),
@@ -140,7 +140,7 @@ async def run_pipeline_stream(
                     "processed": result.processed,
                 })
             except Exception as e:
-                logger.exception("[Pipeline] SSE 실행 중 오류 account_id=%s", parsed_account_id)
+                logger.exception("[Pipeline] SSE 실행 중 오류 account_id=%s", account_id)
                 await queue.put({"type": "error", "at": datetime.now(timezone.utc).isoformat(), "message": str(e)})
             finally:
                 local_db.close()
@@ -160,9 +160,8 @@ async def run_pipeline_stream(
 
 
 @router.get("/progress")
-async def get_progress(account_id: Optional[str] = Cookie(default=None)):
-    parsed_account_id = int(account_id) if account_id else None
-    messages = get_progress_store().read_all(parsed_account_id)
+async def get_progress(account_id: Optional[int] = Depends(require_user_optional)):
+    messages = get_progress_store().read_all(account_id)
     done = bool(messages) and messages[-1].startswith("✅")
     return {"messages": messages, "done": done}
 
@@ -170,33 +169,30 @@ async def get_progress(account_id: Optional[str] = Cookie(default=None)):
 @router.get("/summaries", response_model=List[StockSummaryResponse])
 async def get_summaries(
     db: Session = Depends(get_db),
-    account_id: Optional[str] = Cookie(default=None),
+    account_id: Optional[int] = Depends(require_user_optional),
 ):
-    parsed_account_id = int(account_id) if account_id else None
     log_repo = AnalysisLogRepositoryImpl(db)
-    logs = log_repo.find_latest_per_symbol(["NEWS"], account_id=parsed_account_id)
+    logs = log_repo.find_latest_per_symbol(["NEWS"], account_id=account_id)
     return [_log_to_summary(log) for log in logs]
 
 
 @router.get("/report-summaries", response_model=List[StockSummaryResponse])
 async def get_report_summaries(
     db: Session = Depends(get_db),
-    account_id: Optional[str] = Cookie(default=None),
+    account_id: Optional[int] = Depends(require_user_optional),
 ):
-    parsed_account_id = int(account_id) if account_id else None
     log_repo = AnalysisLogRepositoryImpl(db)
-    logs = log_repo.find_latest_per_symbol(["DISCLOSURE", "REPORT"], account_id=parsed_account_id)
+    logs = log_repo.find_latest_per_symbol(["DISCLOSURE", "REPORT"], account_id=account_id)
     return [_log_to_summary(log) for log in logs]
 
 
 @router.get("/logs", response_model=List[AnalysisLogResponse])
 async def get_analysis_logs(
     db: Session = Depends(get_db),
-    account_id: Optional[str] = Cookie(default=None),
+    account_id: Optional[int] = Depends(require_user_optional),
 ):
-    parsed_account_id = int(account_id) if account_id else None
     log_repo = AnalysisLogRepositoryImpl(db)
-    return log_repo.find_recent(limit=50, account_id=parsed_account_id)
+    return log_repo.find_recent(limit=50, account_id=account_id)
 
 
 async def run_pipeline_job():

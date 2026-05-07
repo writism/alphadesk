@@ -10,54 +10,68 @@ type Props = {
 export function DashboardPipelineResult({ running, pipelineResult, allSkipped, elapsedSeconds }: Props) {
     if (running || !pipelineResult) return null
 
+    const successCount = pipelineResult.processed.filter((p) => !p.skipped).length
+    const skippedCount = pipelineResult.processed.filter((p) => p.skipped).length
+
     return (
-        <div className="mb-6 border rounded-lg overflow-hidden dark:border-gray-700">
-            <div className="px-4 py-2 bg-gray-50 dark:bg-gray-800 border-b dark:border-gray-700 flex items-center justify-between">
-                <span className="text-sm font-semibold text-gray-700 dark:text-gray-300">파이프라인 실행 결과</span>
+        <div className="mb-6 border border-outline overflow-hidden">
+            {/* 헤더 */}
+            <div className="px-4 py-2 bg-surface-container border-b border-outline-variant flex items-center justify-between">
+                <span className="font-mono text-xs font-bold text-on-surface uppercase tracking-widest">
+                    PIPELINE_RESULT
+                </span>
                 <div className="flex items-center gap-3">
                     {elapsedSeconds !== null && (
-                        <span className="text-xs text-gray-400">
-                            총 {elapsedSeconds}초 소요
+                        <span className="font-mono text-[10px] text-outline">
+                            {elapsedSeconds}s elapsed
                         </span>
                     )}
                     {allSkipped ? (
-                        <span className="text-xs text-red-500 font-medium">전체 분석 실패</span>
+                        <span className="font-mono text-[10px] font-bold text-error border border-error px-1.5 py-0.5">
+                            ALL_FAILED
+                        </span>
                     ) : (
-                        <span className="text-xs text-green-600 font-medium">
-                            {pipelineResult.processed.filter((p) => !p.skipped).length}개 성공
-                            {pipelineResult.processed.filter((p) => p.skipped).length > 0 && (
-                                <span className="ml-1 text-gray-400">
-                                    ({pipelineResult.processed.filter((p) => p.skipped).length}개 중복 건너뜀)
+                        <span className="font-mono text-[10px] font-bold text-primary border border-primary px-1.5 py-0.5">
+                            {successCount}_OK
+                            {skippedCount > 0 && (
+                                <span className="ml-1 text-outline font-normal">
+                                    / {skippedCount}_SKIP
                                 </span>
                             )}
                         </span>
                     )}
                 </div>
             </div>
-            <ul className="divide-y dark:divide-gray-700">
+
+            {/* 종목별 결과 */}
+            <ul className="divide-y divide-outline-variant">
                 {pipelineResult.processed.map((item) => (
-                    <li key={item.symbol} className="flex items-center gap-3 px-4 py-2.5">
-                        <span className="font-mono text-sm font-semibold w-20 text-gray-600 dark:text-gray-400">
+                    <li key={item.symbol} className="flex items-center gap-3 px-4 py-2">
+                        <span className="font-mono text-xs font-bold text-on-surface w-20 shrink-0">
                             {item.symbol}
                         </span>
                         {item.skipped ? (
                             <>
-                                <span className="px-2 py-0.5 text-xs rounded-full bg-red-100 text-red-600 dark:bg-red-950 dark:text-red-400">
-                                    스킵
+                                <span className="font-mono text-[10px] border border-error text-error px-1.5 py-0.5 uppercase shrink-0">
+                                    SKIP
                                 </span>
-                                <span className="text-sm text-gray-500">{item.reason ?? "알 수 없는 오류"}</span>
+                                <span className="font-mono text-xs text-on-surface-variant truncate">
+                                    {item.reason ?? "알 수 없는 오류"}
+                                </span>
                             </>
                         ) : (
-                            <span className="px-2 py-0.5 text-xs rounded-full bg-green-100 text-green-600 dark:bg-green-950 dark:text-green-400">
-                                분석 완료
+                            <span className="font-mono text-[10px] border border-primary text-primary px-1.5 py-0.5 uppercase">
+                                OK
                             </span>
                         )}
                     </li>
                 ))}
             </ul>
+
+            {/* 전체 실패 경고 */}
             {allSkipped && (
-                <div className="px-4 py-3 bg-yellow-50 border-t dark:bg-yellow-950 dark:border-gray-700 text-sm text-yellow-700 dark:text-yellow-400">
-                    모든 종목의 분석이 실패했습니다. 백엔드 뉴스 수집 또는 AI 서비스 상태를 확인해 주세요.
+                <div className="px-4 py-3 border-t border-outline-variant bg-surface-container font-mono text-xs text-error">
+                    [!] 모든 종목의 분석이 실패했습니다 — 백엔드 수집·AI 서비스 상태를 확인하세요.
                 </div>
             )}
         </div>

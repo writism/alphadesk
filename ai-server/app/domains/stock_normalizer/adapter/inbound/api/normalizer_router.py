@@ -1,5 +1,6 @@
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, Depends, HTTPException
 
+from app.infrastructure.auth.require_user import require_user
 from app.domains.stock_normalizer.adapter.outbound.persistence.normalized_disclosure_repository_impl import InMemoryNormalizedDisclosureRepository
 from app.domains.stock_normalizer.infrastructure.repository_registry import normalized_article_repository
 from app.domains.stock_normalizer.application.request.normalize_disclosure_request import NormalizeDisclosureRequest
@@ -16,7 +17,10 @@ _article_repository = normalized_article_repository
 
 
 @router.post("/disclosures", response_model=NormalizeDisclosureResponse, status_code=201)
-async def normalize_disclosure(request: NormalizeDisclosureRequest):
+async def normalize_disclosure(
+    request: NormalizeDisclosureRequest,
+    _: int = Depends(require_user),
+):
     try:
         return await NormalizeDisclosureUseCase(_disclosure_repository).execute(request)
     except ValueError as e:
@@ -24,7 +28,10 @@ async def normalize_disclosure(request: NormalizeDisclosureRequest):
 
 
 @router.post("/articles", response_model=NormalizeRawArticleResponse, status_code=201)
-async def normalize_raw_article(request: NormalizeRawArticleRequest):
+async def normalize_raw_article(
+    request: NormalizeRawArticleRequest,
+    _: int = Depends(require_user),
+):
     try:
         return await NormalizeRawArticleUseCase(_article_repository).execute(request)
     except ValueError as e:

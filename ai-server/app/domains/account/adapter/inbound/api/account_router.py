@@ -5,6 +5,9 @@ from fastapi import APIRouter, Cookie, Depends, HTTPException
 from fastapi.responses import JSONResponse
 from sqlalchemy.orm import Session
 
+from app.infrastructure.auth.cookie_helper import set_auth_cookies, set_display_cookies
+from app.infrastructure.auth.require_user import require_user
+
 from app.domains.account.adapter.outbound.in_memory.redis_account_session_adapter import RedisAccountSessionAdapter
 from app.domains.account.adapter.outbound.in_memory.redis_kakao_token_adapter import RedisKakaoTokenAdapter
 from app.domains.account.adapter.outbound.in_memory.redis_temp_token_port_impl import RedisTempTokenPortImpl
@@ -56,10 +59,14 @@ async def register_account(
         frontend_url = _settings.cors_allowed_frontend_url
         secure = _settings.cookie_secure
         response = JSONResponse(content={"success": True, "redirect_url": frontend_url})
-        response.set_cookie(key="session_token", value=result.session_token, httponly=True, secure=secure, max_age=3600 * 24 * 7, samesite="lax")
-        response.set_cookie(key="nickname", value=quote(result.nickname), secure=secure, max_age=3600 * 24 * 7, samesite="lax")
-        response.set_cookie(key="email", value=quote(result.email), secure=secure, max_age=3600 * 24 * 7, samesite="lax")
-        response.set_cookie(key="account_id", value=str(result.account_id), secure=secure, max_age=3600 * 24 * 7, samesite="lax")
+        set_auth_cookies(response, token_key="session_token", token_value=result.session_token, secure=secure)
+        set_display_cookies(
+            response,
+            nickname=quote(result.nickname),
+            email=quote(result.email),
+            account_id=result.account_id,
+            secure=secure,
+        )
         response.delete_cookie("temp_token")
         return response
 
@@ -74,12 +81,10 @@ async def register_account(
 
 @router.get("/settings", response_model=AccountSettingsResponse)
 async def get_account_settings(
-    account_id: str = Cookie(default=None),
+    account_id: int = Depends(require_user),
     db: Session = Depends(get_db),
 ):
-    if not account_id:
-        raise HTTPException(status_code=401, detail="로그인이 필요합니다.")
-    orm = db.query(AccountORM).filter(AccountORM.id == int(account_id)).first()
+    orm = db.query(AccountORM).filter(AccountORM.id == account_id).first()
     if orm is None:
         raise HTTPException(status_code=404, detail="계정을 찾을 수 없습니다.")
     return AccountSettingsResponse(is_watchlist_public=bool(orm.is_watchlist_public))
@@ -88,12 +93,10 @@ async def get_account_settings(
 @router.patch("/settings", response_model=AccountSettingsResponse)
 async def update_account_settings(
     request: UpdateSettingsRequest,
-    account_id: str = Cookie(default=None),
+    account_id: int = Depends(require_user),
     db: Session = Depends(get_db),
 ):
-    if not account_id:
-        raise HTTPException(status_code=401, detail="로그인이 필요합니다.")
-    orm = db.query(AccountORM).filter(AccountORM.id == int(account_id)).first()
+    orm = db.query(AccountORM).filter(AccountORM.id == account_id).first()
     if orm is None:
         raise HTTPException(status_code=404, detail="계정을 찾을 수 없습니다.")
     orm.is_watchlist_public = request.is_watchlist_public

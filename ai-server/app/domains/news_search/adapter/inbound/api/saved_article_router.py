@@ -1,8 +1,7 @@
-from typing import Optional
-
-from fastapi import APIRouter, Cookie, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
+from app.infrastructure.auth.require_user import require_user
 from app.domains.news_search.adapter.outbound.external.openai_analysis_adapter import OpenAIAnalysisAdapter
 from app.domains.news_search.adapter.outbound.external.serp_news_search_adapter import SerpNewsSearchAdapter
 from app.domains.news_search.adapter.outbound.persistence.article_content_store_impl import ArticleContentStoreImpl
@@ -36,14 +35,12 @@ _analysis_adapter = OpenAIAnalysisAdapter(api_key=_settings.openai_api_key)
 async def list_saved_articles(
     db: Session = Depends(get_db),
     pg_db: Session = Depends(get_pg_db),
-    account_id: Optional[str] = Cookie(default=None),
+    account_id: int = Depends(require_user),
 ):
-    if account_id is None:
-        raise HTTPException(status_code=401, detail="인증이 필요합니다.")
     repository = SavedArticleRepositoryImpl(db)
     content_store = ArticleContentStoreImpl(pg_db)
     usecase = ListSavedArticlesUseCase(repository, content_store)
-    return usecase.execute(int(account_id))
+    return usecase.execute(account_id)
 
 
 @router.post("/interest-articles", response_model=SaveInterestArticleResponse, status_code=201)
@@ -51,17 +48,13 @@ async def save_interest_article(
     request: SaveArticleRequest,
     db: Session = Depends(get_db),
     pg_db: Session = Depends(get_pg_db),
-    account_id: Optional[str] = Cookie(default=None),
+    account_id: int = Depends(require_user),
 ):
-    if account_id is None:
-        raise HTTPException(status_code=401, detail="인증이 필요합니다.")
-    parsed_account_id = int(account_id)
-
     repository = SavedArticleRepositoryImpl(db)
     content_store = ArticleContentStoreImpl(pg_db)
     usecase = SaveArticleUseCase(repository, content_store, _content_fetcher)
     try:
-        result = usecase.execute(request, account_id=parsed_account_id)
+        result = usecase.execute(request, account_id=account_id)
         content = content_store.get_content(result.id) or ""
         return SaveInterestArticleResponse(
             id=result.id,
@@ -80,17 +73,13 @@ async def save_article(
     request: SaveArticleRequest,
     db: Session = Depends(get_db),
     pg_db: Session = Depends(get_pg_db),
-    account_id: Optional[str] = Cookie(default=None),
+    account_id: int = Depends(require_user),
 ):
-    if account_id is None:
-        raise HTTPException(status_code=401, detail="인증이 필요합니다.")
-    parsed_account_id = int(account_id)
-
     repository = SavedArticleRepositoryImpl(db)
     content_store = ArticleContentStoreImpl(pg_db)
     usecase = SaveArticleUseCase(repository, content_store, _content_fetcher)
     try:
-        return usecase.execute(request, account_id=parsed_account_id)
+        return usecase.execute(request, account_id=account_id)
     except ValueError as e:
         raise HTTPException(status_code=409, detail=str(e))
 
@@ -100,10 +89,8 @@ async def analyze_article(
     article_id: int,
     db: Session = Depends(get_db),
     pg_db: Session = Depends(get_pg_db),
-    account_id: Optional[str] = Cookie(default=None),
+    account_id: int = Depends(require_user),
 ):
-    if account_id is None:
-        raise HTTPException(status_code=401, detail="인증이 필요합니다.")
     repository = SavedArticleRepositoryImpl(db)
     content_store = ArticleContentStoreImpl(pg_db)
     usecase = AnalyzeArticleUseCase(repository, _analysis_adapter, content_store)
@@ -118,15 +105,12 @@ async def bulk_analyze(
     request: BulkAnalyzeRequest,
     db: Session = Depends(get_db),
     pg_db: Session = Depends(get_pg_db),
-    account_id: Optional[str] = Cookie(default=None),
+    account_id: int = Depends(require_user),
 ):
-    if account_id is None:
-        raise HTTPException(status_code=401, detail="인증이 필요합니다.")
-    parsed_account_id = int(account_id)
     usecase = BulkAnalyzeUseCase(
         news_search_port=SerpNewsSearchAdapter(),
         repository=SavedArticleRepositoryImpl(db),
         content_store=ArticleContentStoreImpl(pg_db),
         analysis_port=_analysis_adapter,
     )
-    return await usecase.execute(request, account_id=parsed_account_id)
+    return await usecase.execute(request, account_id=account_id)

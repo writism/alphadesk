@@ -123,180 +123,27 @@ class RunPipelineUseCase:
 
         total = len(watchlist_items)
         await _emit(on_event, {
-            "type": "progress",
-            "phase": "START",
-            "at": _now(),
+            "type": "progress", "phase": "START", "at": _now(),
             "message": f"관심종목 {total}개 파이프라인 시작",
         })
 
-        # Phase 1: 수집 (순차 — DB 세션 공유)
-        no_article_symbols = []
-        symbol_data: dict[str, tuple] = {}  # symbol → (name, news_articles, report_articles)
-
-        for idx, item in enumerate(watchlist_items, 1):
-            symbol = item.symbol
-            name = item.name
-            await _emit(on_event, {
-                "type": "progress",
-                "phase": "COLLECT",
-                "symbol": symbol,
-                "at": _now(),
-                "message": f"[{idx}/{total}] {name}({symbol}) 기사 수집 중...",
-                "progress": {"current": idx, "total": total},
-            })
-            try:
-                collect_usecase = CollectArticlesUseCase(self._raw_article_repository, self._collectors, self._stock_repository)
-                await collect_usecase.execute(symbol)
-            except Exception as e:
-                logger.error(f"[Pipeline] {name}({symbol}) 수집 중 오류: {e}")
-                await _emit(on_event, {
-                    "type": "error",
-                    "phase": "COLLECT",
-                    "symbol": symbol,
-                    "at": _now(),
-                    "message": f"[{idx}/{total}] {name}({symbol}) 수집 오류 — 건너뜁니다",
-                })
-                no_article_symbols.append(symbol)
-                continue
-
-            raw_articles = self._raw_article_repository.find_all(symbol=symbol)
-            if not raw_articles:
-                await _emit(on_event, {
-                    "type": "progress",
-                    "phase": "COLLECT",
-                    "symbol": symbol,
-                    "at": _now(),
-                    "message": f"[{idx}/{total}] {name} — 수집된 기사 없음, 건너뜀",
-                })
-                no_article_symbols.append(symbol)
-                continue
-
-            news_articles = [r for r in raw_articles if r.source_type in NEWS_SOURCE_TYPES]
-            report_articles = [r for r in raw_articles if r.source_type in REPORT_SOURCE_TYPES]
-            selected_news = _select_articles(news_articles, article_mode)
-            selected_reports = _select_articles(report_articles, article_mode)
-            await _emit(on_event, {
-                "type": "progress",
-                "phase": "COLLECT",
-                "symbol": symbol,
-                "at": _now(),
-                "message": (
-                    f"[{idx}/{total}] {name} — "
-                    f"뉴스 {len(news_articles)}건 중 {len(selected_news)}건, "
-                    f"공시 {len(report_articles)}건 중 {len(selected_reports)}건 분석 예정"
-                ),
-            })
-            symbol_data[symbol] = (item.name, selected_news, selected_reports)
-            logger.info(
-                "[Pipeline] %s(%s) 기사 선택 — 뉴스 %d/%d건, 공시·리포트 %d/%d건 (mode=%s)",
-                name, symbol,
-                len(selected_news), len(news_articles),
-                len(selected_reports), len(report_articles),
-                article_mode.value,
-            )
+        no_article_symbols, symbol_data = await self._collect_articles(
+            watchlist_items, total, article_mode, on_event
+        )
 
         await _emit(on_event, {
-            "type": "progress",
-            "phase": "COLLECT",
-            "at": _now(),
+            "type": "progress", "phase": "COLLECT", "at": _now(),
             "message": f"수집 완료. {len(symbol_data)}개 종목 AI 분석 시작...",
         })
 
-        # Phase 2: AI 분석 (병렬 — DB 미사용)
-        async def analyze_pair(symbol: str, name: str, news_arts, report_arts):
-            await _emit(on_event, {
-                "type": "progress",
-                "phase": "ANALYZE",
-                "symbol": symbol,
-                "at": _now(),
-                "message": f"{name}({symbol}) AI 분석 중...",
-            })
-            news_best, report_best = await asyncio.gather(
-                self._analyze_articles(news_arts, symbol, name),
-                self._analyze_articles(report_arts, symbol, name),
-            )
-            await _emit(on_event, {
-                "type": "progress",
-                "phase": "ANALYZE",
-                "symbol": symbol,
-                "at": _now(),
-                "message": f"{name}({symbol}) 분석 완료",
-            })
-            return symbol, name, news_best, report_best
+        analysis_results = await self._run_analysis(symbol_data, on_event)
 
-        analysis_results = await asyncio.gather(*[
-            analyze_pair(symbol, name, news, report)
-            for symbol, (name, news, report) in symbol_data.items()
-        ])
-
-        # Phase 3: 결과 집계
-        results = [{"symbol": s, "skipped": True, "reason": "수집된 기사 없음"} for s in no_article_symbols]
-        summaries = []
-        report_summaries = []
-        logs = []
-
-        for symbol, name, news_best, report_best in analysis_results:
-            if news_best:
-                analysis, source_type, url, article_published_at, source_name = news_best
-                tags = [t.label for t in analysis.tags]
-                summaries.append(StockSummaryResponse(
-                    symbol=symbol, name=name,
-                    summary=analysis.summary, tags=tags,
-                    sentiment=analysis.sentiment,
-                    sentiment_score=analysis.sentiment_score,
-                    confidence=analysis.confidence,
-                    source_type=source_type,
-                    url=url,
-                    article_published_at=article_published_at,
-                    source_name=source_name,
-                ))
-                logs.append(AnalysisLogResponse(
-                    analyzed_at=datetime.now(), symbol=symbol, name=name,
-                    summary=analysis.summary, tags=tags,
-                    sentiment=analysis.sentiment,
-                    sentiment_score=analysis.sentiment_score,
-                    confidence=analysis.confidence,
-                    source_type=source_type,
-                    url=url,
-                    article_published_at=article_published_at,
-                    source_name=source_name,
-                ))
-
-            if report_best:
-                analysis, source_type, url, article_published_at, source_name = report_best
-                tags = [t.label for t in analysis.tags]
-                report_summaries.append(StockSummaryResponse(
-                    symbol=symbol, name=name,
-                    summary=analysis.summary, tags=tags,
-                    sentiment=analysis.sentiment,
-                    sentiment_score=analysis.sentiment_score,
-                    confidence=analysis.confidence,
-                    source_type=source_type,
-                    url=url,
-                    article_published_at=article_published_at,
-                    source_name=source_name,
-                ))
-                logs.append(AnalysisLogResponse(
-                    analyzed_at=datetime.now(), symbol=symbol, name=name,
-                    summary=analysis.summary, tags=tags,
-                    sentiment=analysis.sentiment,
-                    sentiment_score=analysis.sentiment_score,
-                    confidence=analysis.confidence,
-                    source_type=source_type,
-                    url=url,
-                    article_published_at=article_published_at,
-                    source_name=source_name,
-                ))
-
-            if news_best or report_best:
-                results.append({"symbol": symbol, "skipped": False})
-            else:
-                results.append({"symbol": symbol, "skipped": True, "reason": "분석 실패"})
+        summaries, report_summaries, logs, results = self._build_results(
+            no_article_symbols, analysis_results
+        )
 
         await _emit(on_event, {
-            "type": "progress",
-            "phase": "DONE",
-            "at": _now(),
+            "type": "progress", "phase": "DONE", "at": _now(),
             "message": f"✅ 파이프라인 완료 — 뉴스 {len(summaries)}건, 공시·리포트 {len(report_summaries)}건",
         })
 
@@ -307,6 +154,172 @@ class RunPipelineUseCase:
             report_summaries=report_summaries,
             logs=logs,
         )
+
+    async def _collect_articles(
+        self,
+        watchlist_items: list,
+        total: int,
+        article_mode: ArticleMode,
+        on_event: Optional[OnEvent],
+    ) -> tuple[list[str], dict[str, tuple]]:
+        """Phase 1: 기사 수집 + 벌크 조회 + 모드별 선택.
+
+        Returns:
+            (no_article_symbols, symbol_data)
+            - no_article_symbols: 수집 실패/기사 없는 심볼 목록
+            - symbol_data: symbol → (name, selected_news, selected_reports)
+        """
+        no_article_symbols: list[str] = []
+        collected_symbols: list[str] = []
+
+        for idx, item in enumerate(watchlist_items, 1):
+            symbol = item.symbol
+            name = item.name
+            await _emit(on_event, {
+                "type": "progress", "phase": "COLLECT", "symbol": symbol, "at": _now(),
+                "message": f"[{idx}/{total}] {name}({symbol}) 기사 수집 중...",
+                "progress": {"current": idx, "total": total},
+            })
+            try:
+                collect_usecase = CollectArticlesUseCase(self._raw_article_repository, self._collectors, self._stock_repository)
+                await collect_usecase.execute(symbol)
+                collected_symbols.append(symbol)
+            except Exception as e:
+                logger.error(f"[Pipeline] {name}({symbol}) 수집 중 오류: {e}")
+                await _emit(on_event, {
+                    "type": "error", "phase": "COLLECT", "symbol": symbol, "at": _now(),
+                    "message": f"[{idx}/{total}] {name}({symbol}) 수집 오류 — 건너뜁니다",
+                })
+                no_article_symbols.append(symbol)
+
+        # 단일 IN 쿼리로 일괄 조회 (N+1 제거)
+        all_articles_map = self._raw_article_repository.find_all_by_symbols(collected_symbols)
+        symbol_index = {item.symbol: item for item in watchlist_items}
+        symbol_data: dict[str, tuple] = {}
+
+        for idx, symbol in enumerate(collected_symbols, 1):
+            item = symbol_index[symbol]
+            name = item.name
+            raw_articles = all_articles_map.get(symbol, [])
+            if not raw_articles:
+                await _emit(on_event, {
+                    "type": "progress", "phase": "COLLECT", "symbol": symbol, "at": _now(),
+                    "message": f"[{idx}/{total}] {name} — 수집된 기사 없음, 건너뜀",
+                })
+                no_article_symbols.append(symbol)
+                continue
+
+            news_articles = [r for r in raw_articles if r.source_type in NEWS_SOURCE_TYPES]
+            report_articles = [r for r in raw_articles if r.source_type in REPORT_SOURCE_TYPES]
+            selected_news = _select_articles(news_articles, article_mode)
+            selected_reports = _select_articles(report_articles, article_mode)
+            await _emit(on_event, {
+                "type": "progress", "phase": "COLLECT", "symbol": symbol, "at": _now(),
+                "message": (
+                    f"[{idx}/{total}] {name} — "
+                    f"뉴스 {len(news_articles)}건 중 {len(selected_news)}건, "
+                    f"공시 {len(report_articles)}건 중 {len(selected_reports)}건 분석 예정"
+                ),
+            })
+            symbol_data[symbol] = (item.name, selected_news, selected_reports)
+            logger.info(
+                "[Pipeline] %s(%s) 기사 선택 — 뉴스 %d/%d건, 공시·리포트 %d/%d건 (mode=%s)",
+                name, symbol, len(selected_news), len(news_articles),
+                len(selected_reports), len(report_articles), article_mode.value,
+            )
+
+        return no_article_symbols, symbol_data
+
+    async def _run_analysis(
+        self,
+        symbol_data: dict[str, tuple],
+        on_event: Optional[OnEvent],
+    ) -> list[tuple]:
+        """Phase 2: AI 분석 (병렬 — DB 미사용).
+
+        Returns:
+            [(symbol, name, news_best, report_best), ...]
+        """
+        async def analyze_pair(symbol: str, name: str, news_arts, report_arts):
+            await _emit(on_event, {
+                "type": "progress", "phase": "ANALYZE", "symbol": symbol, "at": _now(),
+                "message": f"{name}({symbol}) AI 분석 중...",
+            })
+            news_best, report_best = await asyncio.gather(
+                self._analyze_articles(news_arts, symbol, name),
+                self._analyze_articles(report_arts, symbol, name),
+            )
+            await _emit(on_event, {
+                "type": "progress", "phase": "ANALYZE", "symbol": symbol, "at": _now(),
+                "message": f"{name}({symbol}) 분석 완료",
+            })
+            return symbol, name, news_best, report_best
+
+        return list(await asyncio.gather(*[
+            analyze_pair(symbol, name, news, report)
+            for symbol, (name, news, report) in symbol_data.items()
+        ]))
+
+    def _build_results(
+        self,
+        no_article_symbols: list[str],
+        analysis_results: list[tuple],
+    ) -> tuple[list, list, list, list]:
+        """Phase 3: 결과 집계.
+
+        Returns:
+            (summaries, report_summaries, logs, processed)
+        """
+        results = [{"symbol": s, "skipped": True, "reason": "수집된 기사 없음"} for s in no_article_symbols]
+        summaries = []
+        report_summaries = []
+        logs = []
+
+        for symbol, name, news_best, report_best in analysis_results:
+            if news_best:
+                analysis, source_type, url, article_published_at, source_name = news_best
+                tags = [t.label for t in analysis.tags]
+                _summary = StockSummaryResponse(
+                    symbol=symbol, name=name,
+                    summary=analysis.summary, tags=tags,
+                    sentiment=analysis.sentiment, sentiment_score=analysis.sentiment_score,
+                    confidence=analysis.confidence, source_type=source_type,
+                    url=url, article_published_at=article_published_at, source_name=source_name,
+                )
+                summaries.append(_summary)
+                logs.append(AnalysisLogResponse(
+                    analyzed_at=datetime.now(), **{k: getattr(_summary, k) for k in (
+                        "symbol", "name", "summary", "tags", "sentiment",
+                        "sentiment_score", "confidence", "source_type",
+                        "url", "article_published_at", "source_name",
+                    )},
+                ))
+
+            if report_best:
+                analysis, source_type, url, article_published_at, source_name = report_best
+                tags = [t.label for t in analysis.tags]
+                _report = StockSummaryResponse(
+                    symbol=symbol, name=name,
+                    summary=analysis.summary, tags=tags,
+                    sentiment=analysis.sentiment, sentiment_score=analysis.sentiment_score,
+                    confidence=analysis.confidence, source_type=source_type,
+                    url=url, article_published_at=article_published_at, source_name=source_name,
+                )
+                report_summaries.append(_report)
+                logs.append(AnalysisLogResponse(
+                    analyzed_at=datetime.now(), **{k: getattr(_report, k) for k in (
+                        "symbol", "name", "summary", "tags", "sentiment",
+                        "sentiment_score", "confidence", "source_type",
+                        "url", "article_published_at", "source_name",
+                    )},
+                ))
+
+            if news_best or report_best:
+                results.append({"symbol": symbol, "skipped": False})
+            else:
+                results.append({"symbol": symbol, "skipped": True, "reason": "분석 실패"})
+
+        return summaries, report_summaries, logs, results
 
     async def _analyze_articles(self, raw_articles, symbol: str, name: str):
         """기사 목록을 분석한다. 복수 기사는 종합 요약, 단건은 개별 분석."""
@@ -371,7 +384,10 @@ class RunPipelineUseCase:
         return best
 
     async def _synthesize_multi(self, raw_articles, symbol: str, name: str):
-        """복수 기사 종합 요약: 최신순 정렬된 기사 전체를 1번의 AI 호출로 종합."""
+        """복수 기사 종합 요약: 최신순 정렬된 기사 전체를 1번의 AI 호출로 종합.
+
+        인스턴스 공유 Semaphore 를 획득한 뒤 LLM 을 호출해 전체 파이프라인 동시성 상한을 준수한다.
+        """
         articles_data = []
         for raw in raw_articles:
             pub_dt = _get_published_dt(raw)
@@ -383,11 +399,12 @@ class RunPipelineUseCase:
             })
 
         try:
-            analysis = await self._analyzer_port.synthesize_articles(
-                symbol=symbol,
-                name=name,
-                articles=articles_data,
-            )
+            async with self._semaphore:
+                analysis = await self._analyzer_port.synthesize_articles(
+                    symbol=symbol,
+                    name=name,
+                    articles=articles_data,
+                )
         except Exception as e:
             logger.warning(f"[Pipeline] {symbol} 종합 분석 실패, 단건 폴백: {e}")
             return await self._analyze_single_best(raw_articles[:1], symbol)

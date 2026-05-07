@@ -1,11 +1,11 @@
 from typing import Optional
 
-from fastapi import APIRouter, Cookie, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
+from app.infrastructure.auth.require_user import require_user
 from app.domains.account.adapter.outbound.persistence.account_repository_impl import AccountRepositoryImpl
-from app.domains.auth.adapter.outbound.in_memory.redis_session_adapter import RedisSessionAdapter
 from app.domains.board.adapter.outbound.persistence.board_repository_impl import BoardRepositoryImpl
 from app.domains.board.application.response.board_list_response import BoardListResponse, BoardListItemResponse
 from app.domains.board.application.usecase.delete_board_usecase import DeleteBoardUseCase
@@ -16,12 +16,9 @@ from app.domains.board.domain.entity.board import Board
 from app.domains.card_share.adapter.outbound.persistence.card_share_repository_impl import (
     CardShareRepositoryImpl,
 )
-from app.infrastructure.cache.redis_client import redis_client
 from app.infrastructure.database.session import get_db
 
 router = APIRouter(prefix="/board", tags=["board"])
-
-_session_adapter = RedisSessionAdapter(redis_client)
 
 
 class CreateBoardRequest(BaseModel):
@@ -38,15 +35,11 @@ class UpdateBoardRequest(BaseModel):
 @router.post("", response_model=BoardListItemResponse, status_code=201)
 async def create_board(
     request: CreateBoardRequest,
-    account_id: Optional[str] = Cookie(default=None),
+    account_id: int = Depends(require_user),
     db: Session = Depends(get_db),
 ):
-    if not account_id:
-        raise HTTPException(status_code=401, detail="로그인이 필요합니다.")
-
-    parsed_account_id = int(account_id)
     account_repository = AccountRepositoryImpl(db)
-    account = account_repository.find_by_id(parsed_account_id)
+    account = account_repository.find_by_id(account_id)
     if not account:
         raise HTTPException(status_code=401, detail="존재하지 않는 계정입니다.")
 
@@ -57,7 +50,7 @@ async def create_board(
         card = card_repo.find_by_id(request.shared_card_id)
         if not card:
             raise HTTPException(status_code=400, detail="존재하지 않는 공유 카드입니다.")
-        if card.sharer_account_id != parsed_account_id:
+        if card.sharer_account_id != account_id:
             raise HTTPException(status_code=403, detail="본인이 공유한 카드만 게시글에 연결할 수 있습니다.")
         shared_card_id_opt = request.shared_card_id
     else:
@@ -75,7 +68,7 @@ async def create_board(
             source_type="NEWS",
             url=None,
             analyzed_at=datetime.now(),
-            sharer_account_id=parsed_account_id,
+            sharer_account_id=account_id,
             sharer_nickname=account.nickname,
         ))
         shared_card_id_opt = board_card.id
@@ -84,7 +77,7 @@ async def create_board(
     saved = board_repository.save(Board(
         title=request.title,
         content=request.content,
-        account_id=parsed_account_id,
+        account_id=account_id,
         shared_card_id=shared_card_id_opt,
     ))
 
@@ -103,12 +96,9 @@ async def create_board(
 async def get_board_list(
     page: int = 1,
     size: int = 10,
-    account_id: Optional[str] = Cookie(default=None),
+    account_id: int = Depends(require_user),
     db: Session = Depends(get_db),
 ):
-    if not account_id:
-        raise HTTPException(status_code=401, detail="로그인이 필요합니다.")
-
     board_repository = BoardRepositoryImpl(db)
     account_repository = AccountRepositoryImpl(db)
     usecase = GetBoardListUseCase(board_repository, account_repository)
@@ -118,17 +108,9 @@ async def get_board_list(
 @router.delete("/delete/{board_id}")
 async def delete_board(
     board_id: int,
-    user_token: Optional[str] = Cookie(default=None),
+    account_id: int = Depends(require_user),
     db: Session = Depends(get_db),
 ):
-    if not user_token:
-        raise HTTPException(status_code=401, detail="로그인이 필요합니다.")
-
-    session = _session_adapter.find_by_token(user_token)
-    if not session:
-        raise HTTPException(status_code=401, detail="유효하지 않은 토큰입니다.")
-
-    account_id = int(session.user_id)
     board_repository = BoardRepositoryImpl(db)
     usecase = DeleteBoardUseCase(board_repository)
 
@@ -143,16 +125,9 @@ async def delete_board(
 @router.get("/read/{board_id}", response_model=BoardListItemResponse)
 async def read_board(
     board_id: int,
-    user_token: Optional[str] = Cookie(default=None),
+    account_id: int = Depends(require_user),
     db: Session = Depends(get_db),
 ):
-    if not user_token:
-        raise HTTPException(status_code=401, detail="로그인이 필요합니다.")
-
-    session = _session_adapter.find_by_token(user_token)
-    if not session:
-        raise HTTPException(status_code=401, detail="유효하지 않은 토큰입니다.")
-
     board_repository = BoardRepositoryImpl(db)
     account_repository = AccountRepositoryImpl(db)
     usecase = GetBoardReadUseCase(board_repository, account_repository)
@@ -168,17 +143,14 @@ async def read_board(
 async def update_board(
     board_id: int,
     request: UpdateBoardRequest,
-    account_id: Optional[str] = Cookie(default=None),
+    account_id: int = Depends(require_user),
     db: Session = Depends(get_db),
 ):
-    if not account_id:
-        raise HTTPException(status_code=401, detail="로그인이 필요합니다.")
-
     board_repository = BoardRepositoryImpl(db)
     board = board_repository.find_by_id(board_id)
     if board is None:
         raise HTTPException(status_code=404, detail="게시물을 찾을 수 없습니다.")
-    if board.account_id != int(account_id):
+    if board.account_id != account_id:
         raise HTTPException(status_code=403, detail="수정 권한이 없습니다.")
 
     account_repository = AccountRepositoryImpl(db)
@@ -194,7 +166,6 @@ async def update_board(
 @router.get("/{board_id}", response_model=BoardListItemResponse)
 async def get_board(
     board_id: int,
-    account_id: Optional[str] = Cookie(default=None),
     db: Session = Depends(get_db),
 ):
     board_repository = BoardRepositoryImpl(db)

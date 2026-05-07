@@ -1,4 +1,6 @@
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, Depends, HTTPException
+
+from app.infrastructure.auth.require_user import require_user
 
 from app.domains.stock_analyzer.adapter.outbound.external.openai_analyzer_adapter import OpenAIAnalyzerAdapter
 from app.domains.stock_analyzer.adapter.outbound.external.openai_keyword_adapter import OpenAIKeywordAdapter
@@ -46,12 +48,18 @@ _get_or_create_analysis_usecase = GetOrCreateAnalysisUseCase(
 
 
 @router.post("/articles", response_model=ArticleAnalysisResponse)
-async def analyze_article(request: AnalyzeArticleRequest) -> ArticleAnalysisResponse:
+async def analyze_article(
+    request: AnalyzeArticleRequest,
+    _: int = Depends(require_user),
+) -> ArticleAnalysisResponse:
     return await _analyze_article_usecase.execute(request)
 
 
 @router.get("/articles/{article_id}/keywords", response_model=KeywordExtractionResponse)
-async def get_keywords(article_id: str) -> KeywordExtractionResponse:
+async def get_keywords(
+    article_id: str,
+    _: int = Depends(require_user),
+) -> KeywordExtractionResponse:
     try:
         return await _extract_keywords_usecase.execute(article_id)
     except ValueError as e:
@@ -59,7 +67,10 @@ async def get_keywords(article_id: str) -> KeywordExtractionResponse:
 
 
 @router.get("/articles/{article_id}/sentiment", response_model=SentimentAnalysisResponse)
-async def get_sentiment(article_id: str) -> SentimentAnalysisResponse:
+async def get_sentiment(
+    article_id: str,
+    _: int = Depends(require_user),
+) -> SentimentAnalysisResponse:
     try:
         return await _analyze_sentiment_usecase.execute(article_id)
     except ValueError as e:
@@ -67,7 +78,10 @@ async def get_sentiment(article_id: str) -> SentimentAnalysisResponse:
 
 
 @router.get("/articles/{article_id}/risk-tags", response_model=RiskTaggingResponse)
-async def get_risk_tags(article_id: str) -> RiskTaggingResponse:
+async def get_risk_tags(
+    article_id: str,
+    _: int = Depends(require_user),
+) -> RiskTaggingResponse:
     try:
         return await _generate_risk_tags_usecase.execute(article_id)
     except ValueError as e:
@@ -75,7 +89,10 @@ async def get_risk_tags(article_id: str) -> RiskTaggingResponse:
 
 
 @router.get("/articles/{article_id}/analysis", response_model=ArticleAnalysisResponse)
-async def get_analysis(article_id: str) -> ArticleAnalysisResponse:
+async def get_analysis(
+    article_id: str,
+    _: int = Depends(require_user),
+) -> ArticleAnalysisResponse:
     try:
         return await _get_or_create_analysis_usecase.execute(article_id)
     except ValueError as e:

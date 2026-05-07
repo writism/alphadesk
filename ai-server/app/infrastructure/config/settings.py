@@ -1,12 +1,14 @@
+from pydantic import Field
 from pydantic_settings import BaseSettings
 
 
 class Settings(BaseSettings):
-    mysql_user: str
-    mysql_password: str
-    mysql_host: str
-    mysql_port: int
-    mysql_database: str
+    # DB — 미설정 시 앱 기동 불가
+    mysql_user: str = Field(...)
+    mysql_password: str = Field(...)
+    mysql_host: str = Field(...)
+    mysql_port: int = Field(...)
+    mysql_database: str = Field(...)
     mysql_pool_size: int = 10
     mysql_max_overflow: int = 20
     mysql_pool_recycle: int = 3600  # 유휴 연결 갱신 주기(초) — MySQL wait_timeout 방어
@@ -48,7 +50,7 @@ class Settings(BaseSettings):
     naver_secret: str = ""
     twitter_bearer_token: str = ""
     dart_api_key: str = ""
-    openai_api_key: str = ""
+    openai_api_key: str = Field(...)  # AI 분석 필수
     openai_model: str = "gpt-5-mini"
     # BL-BE-50: Responses API 전용 (chat.completions용 openai_model과 분리)
     openai_responses_model: str = "gpt-5-mini"

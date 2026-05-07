@@ -2,6 +2,8 @@ import logging
 import secrets
 from urllib.parse import quote
 
+from app.infrastructure.auth.cookie_helper import set_auth_cookies, set_display_cookies
+
 logger = logging.getLogger(__name__)
 
 from fastapi import APIRouter, Depends, HTTPException
@@ -85,34 +87,34 @@ async def request_access_token_after_redirection(
 
         secure = _settings.cookie_secure
         if result.is_registered and result.user_token:
-            response.set_cookie(key="user_token", value=result.user_token, httponly=True, secure=secure, max_age=3600 * 24 * 7, samesite="lax")
-            response.set_cookie(key="nickname", value=quote(result.nickname), secure=secure, max_age=3600 * 24 * 7, samesite="lax")
-            response.set_cookie(key="email", value=quote(result.email), secure=secure, max_age=3600 * 24 * 7, samesite="lax")
-            response.set_cookie(key="account_id", value=str(result.account_id), secure=secure, max_age=3600 * 24 * 7, samesite="lax")
+            set_auth_cookies(response, token_key="user_token", token_value=result.user_token, secure=secure)
+            set_display_cookies(
+                response,
+                nickname=quote(result.nickname),
+                email=quote(result.email),
+                account_id=result.account_id,
+                secure=secure,
+            )
 
         if result.temp_token_issued and result.temp_token:
-            response.set_cookie(
-                key="temp_token",
-                value=result.temp_token,
-                httponly=True,
+            set_auth_cookies(
+                response,
+                token_key="temp_token",
+                token_value=result.temp_token,
                 secure=secure,
                 max_age=TEMP_TOKEN_TTL_SECONDS,
-                samesite="lax",
             )
-            response.set_cookie(
-                key="kakao_nickname",
-                value=quote(result.nickname),
+            set_display_cookies(
+                response,
+                nickname=quote(result.nickname),
+                email=quote(result.email),
+                account_id=None,
                 secure=secure,
                 max_age=TEMP_TOKEN_TTL_SECONDS,
-                samesite="lax",
             )
-            response.set_cookie(
-                key="kakao_email",
-                value=quote(result.email),
-                secure=secure,
-                max_age=TEMP_TOKEN_TTL_SECONDS,
-                samesite="lax",
-            )
+            # 회원가입 전 임시 쿠키는 kakao_ prefix 로도 세팅
+            response.set_cookie(key="kakao_nickname", value=quote(result.nickname), httponly=True, secure=secure, samesite="strict", max_age=TEMP_TOKEN_TTL_SECONDS)
+            response.set_cookie(key="kakao_email", value=quote(result.email), httponly=True, secure=secure, samesite="strict", max_age=TEMP_TOKEN_TTL_SECONDS)
 
         return response
 

@@ -5,6 +5,7 @@ from fastapi import APIRouter, Depends, Query
 from sqlalchemy.orm import Session
 
 from app.infrastructure.auth.require_admin import require_admin
+from app.infrastructure.auth.require_user import require_user
 from app.domains.stock_collector.adapter.outbound.external.dart_collector_adapter import DartCollectorAdapter
 from app.domains.stock_collector.adapter.outbound.external.dart_report_collector_adapter import DartReportCollectorAdapter
 from app.domains.stock_collector.adapter.outbound.external.google_news_rss_collector_adapter import GoogleNewsRssCollectorAdapter
@@ -38,7 +39,11 @@ _NAME_TO_CODE = {
 
 
 @router.post("/collect", response_model=CollectResponse, status_code=200)
-async def collect_articles(request: CollectRequest, db: Session = Depends(get_db)):
+async def collect_articles(
+    request: CollectRequest,
+    db: Session = Depends(get_db),
+    _: int = Depends(require_user),
+):
     repository = RawArticleRepositoryImpl(db)
     stock_repository = StockRepositoryImpl(db)
     collectors = [DartCollectorAdapter(), DartReportCollectorAdapter(), NewsCollectorAdapter(), GoogleNewsRssCollectorAdapter()]
@@ -69,6 +74,7 @@ async def get_articles(
     symbol: Optional[str] = Query(default=None),
     source_type: Optional[str] = Query(default=None),
     db: Session = Depends(get_db),
+    _: int = Depends(require_user),
 ):
     repository = RawArticleRepositoryImpl(db)
     usecase = GetArticlesUseCase(repository)

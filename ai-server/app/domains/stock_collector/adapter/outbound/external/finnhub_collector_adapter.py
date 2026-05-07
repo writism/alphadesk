@@ -1,4 +1,3 @@
-import asyncio
 import datetime
 import logging
 import re
@@ -10,6 +9,7 @@ import httpx
 from app.domains.stock_collector.application.usecase.collector_port import CollectorPort
 from app.domains.stock_collector.domain.entity.raw_article import RawArticle
 from app.infrastructure.config.settings import get_settings
+from app.infrastructure.external.http_retry import get_with_retry
 
 logger = logging.getLogger(__name__)
 
@@ -36,8 +36,7 @@ class FinnhubCollectorAdapter(CollectorPort):
         }
 
         try:
-            response = await asyncio.to_thread(httpx.get, self.API_URL, params=params, timeout=10.0)
-            response.raise_for_status()
+            response = await get_with_retry(self.API_URL, params=params, timeout=10.0, source="FinnhubCollector")
             data = response.json()
         except httpx.HTTPError as e:
             logger.warning("[FinnhubCollector] 요청 실패: %s", e)

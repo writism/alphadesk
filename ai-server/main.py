@@ -59,6 +59,7 @@ from app.domains.investment.infrastructure.orm.investment_youtube_video_orm impo
 from app.domains.investment.infrastructure.orm.investment_youtube_comment_orm import InvestmentYouTubeCommentORM  # noqa: F401
 from app.domains.investment.infrastructure.orm.analysis_cache_orm import AnalysisCacheORM  # noqa: F401
 from app.infrastructure.config.settings import Settings, get_settings
+from app.infrastructure.metrics.prometheus import router as metrics_router
 from app.infrastructure.database.session import Base, engine
 from app.infrastructure.database.pg_session import PgBase, pg_engine, check_pg_health
 from app.infrastructure.external.serp_client import SerpClient
@@ -182,6 +183,9 @@ app.include_router(admin_router)
 app.include_router(notification_router)
 app.include_router(analytics_router)
 app.include_router(user_profile_router)
+
+
+app.include_router(metrics_router)
 
 
 @app.get("/")

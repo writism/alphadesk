@@ -1,5 +1,5 @@
 from abc import ABC, abstractmethod
-from typing import Optional, List
+from typing import Dict, Optional, List
 
 from app.domains.stock_collector.domain.entity.raw_article import RawArticle
 
@@ -15,6 +15,11 @@ class RawArticleRepositoryPort(ABC):
 
     @abstractmethod
     def find_all(self, symbol: Optional[str] = None, source_type: Optional[str] = None) -> List[RawArticle]:
+        pass
+
+    @abstractmethod
+    def find_all_by_symbols(self, symbols: List[str]) -> Dict[str, List[RawArticle]]:
+        """여러 종목의 기사를 단일 IN 쿼리로 조회한다. symbol → RawArticle 목록 매핑을 반환한다."""
         pass
 
     @abstractmethod

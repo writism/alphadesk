@@ -1,4 +1,4 @@
-from typing import Optional, List
+from typing import Dict, Optional, List
 
 from sqlalchemy.orm import Session
 
@@ -40,6 +40,20 @@ class RawArticleRepositoryImpl(RawArticleRepositoryPort):
             query = query.filter(RawArticleORM.source_type == source_type)
         query = query.order_by(RawArticleORM.created_at.desc())
         return [RawArticleMapper.to_entity(orm) for orm in query.all()]
+
+    def find_all_by_symbols(self, symbols: List[str]) -> Dict[str, List[RawArticle]]:
+        if not symbols:
+            return {}
+        orms = (
+            self._db.query(RawArticleORM)
+            .filter(RawArticleORM.symbol.in_(symbols))
+            .order_by(RawArticleORM.created_at.desc())
+            .all()
+        )
+        result: Dict[str, List[RawArticle]] = {s: [] for s in symbols}
+        for orm in orms:
+            result[orm.symbol].append(RawArticleMapper.to_entity(orm))
+        return result
 
     def migrate_symbol(self, old_symbol: str, new_symbol: str) -> int:
         count = (
